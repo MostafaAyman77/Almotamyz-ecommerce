@@ -10,63 +10,24 @@ const Brand = require("../models/brandModel");
 // @desc        Get list of brands
 // @route       GET /api/v1/brands?page=1&limit=5
 // @access      Public
-exports.getBrands = asyncHandler(async (req,res) => {
-    //  Build Query
-    const documentsCounts = await Brand.countDocuments();
-    const apiFeatures = new ApiFeatures(Brand.find(), req.query)
-    .paginate(documentsCounts)
-    .filter()
-    .search()
-    .limitFields()
-    .sort();
-
-    // Execute Query
-    const { mongooseQuery, paginationResult } = apiFeatures;
-    const brands = await mongooseQuery; 
-
-    res.status(200).json({results: brands.length, paginationResult, data: brands});
-    res.send();
-});
+exports.getBrands = factory.getAll(Brand);
 
 // @desc        Get specific brand by id
 // @route       GET /api/v1/brands/:id
 // @access      Public
-exports.getBrand = asyncHandler( async(req, res, next) => {
-    const { id } = req.params;
-    const brand = await Brand.findById(id);
-    if(!brand) {
-        // res.status(404).json({message: `No brand for this id ${id}`});
-        return next(new ApiError(`No brand for this id ${id}`, 404));
-    }
-    res.status(200).json({data: brand});
-});
+exports.getBrand = factory.getOne(Brand);
 
 // @desc        Create brand
 // @route       Post  /api/v1/brands
 // @access      Private
 
 // Async await
-exports.createBrand = asyncHandler( async (req,res) => {
-    const { name } = req.body;
-
-        const brand = await Brand.create( {name, slug: slugify(name) });
-        res.status(201).json({data:brand});
-});
+exports.createBrand = factory.createOne(Brand);
 
 // @desc        Update specific brand 
 // @route       PUT /api/v1/brands/:id
 // @access      Private
-exports.updateBrand = asyncHandler(async(req, res, next) => {
-    const { id } = req.params;
-    const {name} = req.body;
-
-    const brand = await Brand.findOneAndUpdate({_id: id},{name, slug: slugify(name)},{new: true});
-    if(!brand) {
-        // res.status(404).json({ message: `No brand for this id ${id}` });
-        return next(new ApiError(`No brand for this id ${id}`, 404));
-    }
-    res.status(200).json({data: brand});
-});
+exports.updateBrand = factory.updateOne(Brand);
 
 // @desc        Delete Specific brand
 // @route       Post  /api/v1/brands/:id
