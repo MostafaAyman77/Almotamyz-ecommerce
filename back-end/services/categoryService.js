@@ -2,6 +2,7 @@ const slugify = require('slugify');
 const asyncHandler = require('express-async-handler');
 const ApiError = require("../utils/apiError");
 const ApiFeatures = require("../utils/apiFeatures");
+const factory = require("./handlersFactory");
 
 const Category = require("../models/categoryModel");
 
@@ -69,12 +70,4 @@ exports.updateCategory = asyncHandler(async(req, res, next) => {
 // @desc        Delete Specific Category
 // @route       Post  /api/v1/categories/:id
 // @access      Private
-exports.deleteCategory = asyncHandler(async(req, res, next) => {
-    const { id } = req.params;
-    const category = await Category.findByIdAndDelete(id);
-    if(!category) {
-        // res.status(404).json({ message: `No category for this id ${id}` });
-        return next(new ApiError(`No category for this id ${id}`, 404));
-    }
-    res.status(204).send();
-});
+exports.deleteCategory = factory.deleteOne(Category);
