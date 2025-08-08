@@ -7,6 +7,7 @@ const {
   getProduct,
   updateProduct,
   deleteProduct,
+  getProductsBySubCategory,
 } = require("../services/productService");
 const {
   getProductValidator,
@@ -15,16 +16,38 @@ const {
   deleteProductValidator,
 } = require("../utils/validators/productValidator");
 
+const authService = require("../services/authService");
+
 const router = express.Router();
 
 router.use("/:productId/reviews", reviewRoute);
 
-router.route("/").get(getProducts).post(createProductValidator, createProduct);
+router
+  .route("/")
+  .get(getProducts)
+  .post(
+    authService.protect,
+    authService.allowedTo("admin"),
+    createProductValidator,
+    createProduct
+  );
 
 router
   .route("/:id")
   .get(getProductValidator, getProduct)
-  .put(updateProductValidator, updateProduct)
-  .delete(deleteProductValidator, deleteProduct);
+  .put(
+    authService.protect,
+    authService.allowedTo("admin"),
+    updateProductValidator,
+    updateProduct
+  )
+  .delete(
+    authService.protect,
+    authService.allowedTo("admin"),
+    deleteProductValidator,
+    deleteProduct
+  );
+
+router.get("/subcategory/:subCategoryId", getProductsBySubCategory);
 
 module.exports = router;

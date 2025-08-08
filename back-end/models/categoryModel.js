@@ -1,24 +1,31 @@
 const mongoose = require("mongoose");
 
-// 1-create Schema
-const categorySchema = new mongoose.Schema({
+const categorySchema = new mongoose.Schema(
+  {
     name: {
-        type: String,
-        required: [true, "Category required"],
-        unique: [true, "Category must be unique"],
-        minlength: [3, "Too short category name"],
-        maxlength: [32, "Too long category name"],
+      type: String,
+      required: [true, "Category required"],
+      unique: [true, "Category must be unique"],
+      minlength: [3, "Too short category name"],
+      maxlength: [32, "Too long category name"],
     },
-    // A and B => shopping.com/a-and-b
     slug: {
-        type: String,
-        lowercase: true
+      type: String,
+      lowercase: true,
     },
-    image: String
-}, 
-{ timestamps: true });
+    image: String,
+  },
+  { timestamps: true }
+);
 
-// 2- Create model
+// Cascade delete subcategories when a category is deleted
+categorySchema.pre("findOneAndDelete", async function (next) {
+  const categoryId = this.getQuery()._id; // get ID from query
+  if (categoryId) {
+    await mongoose.model("SubCategory").deleteMany({ category: categoryId });
+  }
+  next();
+});
+
 const CategoryModel = mongoose.model("Category", categorySchema);
-
 module.exports = CategoryModel;
