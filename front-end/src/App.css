@@ -1,0 +1,26 @@
+:root {
+  --color-brand-primary: #e63946;
+  --color-brand-secondary: #457b9d;
+
+  /* Supporting Neutrals */
+  --color-background-light: #f1faee;
+  --color-background-dark: #1d3557;
+
+  /* Accents & Highlights */
+  --color-highlight-yellow: #ffb703;
+  --color-highlight-orange: #f4a261;
+
+  /* Text & Information */
+  --color-text-dark: #2a2a2a;
+  --color-text-light: #f1faee;
+
+  /* Status & Feedback */
+  --color-status-success: #2a9d8f;
+  --color-status-error: #e63946;
+  --color-status-warning: #ffb703;
+}
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box !important;
+}
