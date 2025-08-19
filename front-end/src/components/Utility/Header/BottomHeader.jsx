@@ -4,14 +4,15 @@ import { IoMdArrowDropdown } from "react-icons/io";
 import { Link, useLocation } from "react-router-dom";
 import { PiSignInBold } from "react-icons/pi";
 import { FaUserPlus } from "react-icons/fa6";
+import "./Header.css";
+import AxiosClient from "../../../../Services/AxiosClient";
 
 const BottomHeader = () => {
   const navLinks = [
-    { name: "Home", link: "/" },
-    { name: "About", link: "/about" },
-    { name: "Accessories", link: "/Accessories" },
-    { name: "blog", link: "/blog" },
-    { name: "Contact", link: "/contact" },
+    { name: "الرئيسية", link: "/" },
+    { name: "المتجر", link: "/" },
+    { name: "من نكون", link: "/who-are-we" },
+    { name: "تواصل معنا", link: "/contact" },
   ];
 
   const location = useLocation();
@@ -24,9 +25,25 @@ const BottomHeader = () => {
   }, [location]);
 
   useEffect(() => {
-    fetch("https://dummyjson.com/products/categories")
-      .then((res) => res.json())
-      .then((data) => setCategories(data));
+    const fetchCategories = async () => {
+      try {
+        const response = await AxiosClient.get("/categories");
+
+        const categoriesData = response.data.data;
+
+        setCategories(
+          categoriesData.map((item) => ({
+            id: item._id,
+            name: item.name,
+            slug: item.slug,
+            image: item.image,
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      }
+    };
+    fetchCategories();
   }, []);
 
   return (

@@ -4,9 +4,8 @@ import CardActions from "@mui/material/CardActions";
 import CardContent from "@mui/material/CardContent";
 import CardMedia from "@mui/material/CardMedia";
 import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
 import ImageLogo from "../../assets/Images/brand1.png";
-const CategoryCard = () => {
+const CategoryCard = ({ image }) => {
   return (
     <>
       <Card sx={{ maxWidth: 345, marginTop: "20px" }}>
@@ -14,7 +13,7 @@ const CategoryCard = () => {
           component="img"
           alt="green iguana"
           height="140"
-          image={ImageLogo}
+          image={image}
         />
         <CardActions>
           <Button size="small">عرض المنتجات</Button>
