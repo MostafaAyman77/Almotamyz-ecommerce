@@ -21,7 +21,7 @@ const router = express.Router();
 
 // Cart routes are now public (support both authenticated users and guests)
 // Authentication is handled within the service functions
-
+router.use(authService.protect , authService.allowedTo('user'));
 router
     .route('/')
     .post(addProductToCartValidator, addProductToCart)
