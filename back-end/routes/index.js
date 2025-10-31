@@ -9,7 +9,7 @@ const wishlistRoute = require('./wishlistRoute');
 const addressRoute = require('./addressRoute');
 const couponRoute = require('./couponRoute');
 const cartRoute = require('./Cart/cartRoute');
-const orderRoute = require('./orderRoute');
+const orderRoute = require('./../routes/Order/orderRoute');
 const guestRoute = require('./guestRoute');
 const paymentRoute = require('./paymentRoute');
 
