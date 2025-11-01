@@ -410,3 +410,56 @@ exports.deleteOrder = asyncHandler(async (req, res, next) => {
 
   res.status(204).send();
 });
+
+// @desc    Paymob payment response (User Redirect - GET)
+// @route   GET /api/v1/orders/paymob-response
+// @access  Public
+exports.paymobResponse = asyncHandler(async (req, res, next) => {
+  console.log("Paymob Response Redirect:", req.query);
+
+  const { success, merchant_order_id, hmac } = req.query;
+
+  // 1) Verify HMAC
+  const isValid = paymobService.verifyResponseCallback(req.query);
+  if (!isValid) {
+    // Redirect to failure page
+    return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?reason=invalid_signature`);
+  }
+
+  // 2) Find order
+  const order = await Order.findById(merchant_order_id);
+  if (!order) {
+    return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?reason=order_not_found`);
+  }
+
+  // 3) Redirect based on success status
+  if (success === "true") {
+    // Redirect to success page
+    res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}`);
+  } else {
+    // Redirect to failure page
+    res.redirect(`${process.env.FRONTEND_URL}/payment/failed?orderId=${order._id}`);
+  }
+});
+
+// @desc    Get all orders
+// @route   GET /api/v1/orders
+// @access  Protected/User-Admin-Manager
+exports.getAllOrders = asyncHandler(async (req, res, next) => {
+  let filter = {};
+  
+  // If user is not admin, show only their orders
+  if (req.user.role === "user") {
+    filter = { user: req.user._id };
+  }
+
+  const orders = await Order.find(filter)
+    .populate("user", "name email")
+    .sort("-createdAt");
+
+  res.status(200).json({
+    status: "success",
+    results: orders.length,
+    data: orders,
+  });
+});

@@ -11,6 +11,7 @@ const {
     updateOrderToDelivered,
     cancelOrder,
     deleteOrder,
+    paymobResponse,
 } = require("./../../services/Order/orderServices");
 
 const authService = require("./../../services/authService");
@@ -25,6 +26,7 @@ const {
 const router = express.Router();
 
 // Public route for Paymob callback
+router.get("/paymob-response",paymobResponse);
 router.post("/paymob-callback", paymobCallback);
 
 // Protected routes - require authentication
