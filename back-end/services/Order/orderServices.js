@@ -8,6 +8,284 @@ const Product = require("./../../models/productModel");
 
 const paymobService = new PaymobService();
 
+
+
+
+// ============================================================
+// PAYMOB CALLBACK 1: Transaction Processed (POST)
+// ============================================================
+// This is the SOURCE OF TRUTH for payment status
+// Server-to-server communication from Paymob
+// Use this to UPDATE your database
+
+// @desc    Paymob Transaction Processed Callback (POST)
+// @route   POST /api/v1/orders/paymob-callback
+// @access  Public (but verified with HMAC)
+exports.paymobCallback = asyncHandler(async (req, res, next) => {
+  console.log("=".repeat(60));
+  console.log("PAYMOB PROCESSED CALLBACK RECEIVED");
+  console.log("=".repeat(60));
+  console.log("Full Request Body:", JSON.stringify(req.body, null, 2));
+
+  // Extract callback data
+  const callbackData = req.body.obj || req.body;
+  const receivedHmac = req.body.hmac;
+
+  // 1) VERIFY HMAC SIGNATURE (Critical for security!)
+  const isValid = paymobService.verifyCallback(callbackData, receivedHmac);
+  if (!isValid) {
+    console.error("❌ HMAC VERIFICATION FAILED - Callback rejected");
+    console.error("Received HMAC:", receivedHmac);
+    // Return 400 but don't throw error (Paymob expects response)
+    return res.status(400).json({ 
+      status: "error", 
+      message: "Invalid callback signature" 
+    });
+  }
+  console.log("✅ HMAC verified successfully");
+
+  // 2) EXTRACT ORDER REFERENCE
+  // merchant_order_id is YOUR MongoDB Order ID
+  const merchantOrderId = callbackData.order?.merchant_order_id;
+  
+  if (!merchantOrderId) {
+    console.error("❌ No merchant_order_id found in callback");
+    return res.status(400).json({ 
+      status: "error", 
+      message: "Missing order reference" 
+    });
+  }
+
+  console.log("🔍 Looking for order:", merchantOrderId);
+
+  // 3) FIND ORDER IN DATABASE
+  const order = await Order.findById(merchantOrderId);
+  
+  if (!order) {
+    console.error(`❌ Order not found: ${merchantOrderId}`);
+    return res.status(404).json({ 
+      status: "error", 
+      message: "Order not found" 
+    });
+  }
+
+  console.log("📦 Order found:", {
+    orderId: order._id,
+    currentStatus: order.paymentStatus,
+    isPaid: order.isPaid,
+    amount: order.totalOrderPrice
+  });
+
+  // 4) PREVENT DUPLICATE PROCESSING
+  // If order is already paid, don't process again
+  if (order.isPaid && order.paymentStatus === "paid") {
+    console.log("⚠️ Order already processed - skipping duplicate callback");
+    return res.status(200).json({ 
+      status: "success", 
+      message: "Already processed" 
+    });
+  }
+
+  // 5) EXTRACT PAYMENT STATUS
+  const transactionId = callbackData.id;
+  const isSuccess = callbackData.success === "true" || callbackData.success === true;
+  const isPending = callbackData.pending === "true" || callbackData.pending === true;
+  const amountCents = parseInt(callbackData.amount_cents);
+  const errorOccured = callbackData.error_occured === "true" || callbackData.error_occured === true;
+
+  console.log("💳 Payment Details:", {
+    transactionId,
+    success: isSuccess,
+    pending: isPending,
+    amountCents,
+    errorOccured,
+    expectedAmount: order.totalOrderPrice * 100
+  });
+
+  // 6) VERIFY AMOUNT MATCHES
+  const expectedAmountCents = Math.round(order.totalOrderPrice * 100);
+  if (amountCents !== expectedAmountCents) {
+    console.error("❌ Amount mismatch!", {
+      received: amountCents,
+      expected: expectedAmountCents
+    });
+    order.paymentStatus = "failed";
+    order.paymentError = "Amount mismatch";
+    await order.save();
+    return res.status(400).json({ 
+      status: "error", 
+      message: "Amount mismatch" 
+    });
+  }
+
+  // 7) UPDATE ORDER BASED ON PAYMENT STATUS
+  if (isSuccess && !isPending && !errorOccured) {
+    // ✅ PAYMENT SUCCESSFUL
+    console.log("✅ PAYMENT SUCCESSFUL");
+    
+    order.isPaid = true;
+    order.paidAt = Date.now();
+    order.paymentStatus = "paid";
+    order.orderStatus = "processing";
+    order.paymobTransactionId = transactionId;
+    
+    // Store transaction details for reconciliation
+    order.transactionDetails = {
+      id: transactionId,
+      amount_cents: amountCents,
+      currency: callbackData.currency,
+      payment_method: callbackData.source_data?.type,
+      card_last_4: callbackData.source_data?.pan,
+      is_3d_secure: callbackData.is_3d_secure,
+      processed_at: callbackData.created_at
+    };
+
+    // Decrement product quantity and increment sold count
+    if (order.cartItems && order.cartItems.length > 0) {
+      const bulkOption = order.cartItems.map((item) => ({
+        updateOne: {
+          filter: { _id: item.product },
+          update: { 
+            $inc: { 
+              quantity: -item.quantity, 
+              sold: +item.quantity 
+            } 
+          },
+        },
+      }));
+      
+      await Product.bulkWrite(bulkOption, {});
+      console.log(`📦 Updated inventory for ${order.cartItems.length} products`);
+    }
+
+    // Clear the user's cart
+    if (order.cart) {
+      await Cart.findByIdAndDelete(order.cart);
+      console.log("🗑️ Cart cleared");
+    }
+
+    console.log("✅ Order updated successfully:", {
+      orderId: order._id,
+      status: order.paymentStatus,
+      transactionId: order.paymobTransactionId
+    });
+
+  } else if (!isSuccess && !isPending) {
+    // ❌ PAYMENT FAILED
+    console.log("❌ PAYMENT FAILED");
+    
+    order.paymentStatus = "failed";
+    order.paymobTransactionId = transactionId;
+    order.paymentError = callbackData.data?.message || "Payment declined";
+    
+    console.log("❌ Order marked as failed:", {
+      orderId: order._id,
+      reason: order.paymentError
+    });
+
+  } else if (isPending) {
+    // ⏳ PAYMENT PENDING (e.g., 3DS authentication)
+    console.log("⏳ PAYMENT PENDING");
+    
+    order.paymentStatus = "pending";
+    order.paymobTransactionId = transactionId;
+    
+    console.log("⏳ Order remains pending:", {
+      orderId: order._id,
+      reason: "Awaiting final status"
+    });
+  }
+
+  // 8) SAVE ORDER TO DATABASE
+  await order.save();
+
+  // 9) OPTIONAL: Send notifications
+  // TODO: Send email to customer
+  // TODO: Send notification to admin
+  // TODO: Trigger webhooks to other systems
+
+  console.log("=".repeat(60));
+  console.log("CALLBACK PROCESSING COMPLETED");
+  console.log("=".repeat(60));
+
+  // Return 200 to acknowledge receipt to Paymob
+  res.status(200).json({ status: "success" });
+});
+
+// ============================================================
+// PAYMOB CALLBACK 2: Transaction Response (GET)
+// ============================================================
+// This redirects the USER back to your website
+// Use this to SHOW a success/failure page
+// DO NOT use this to update payment status (use POST callback)
+
+// @desc    Paymob Transaction Response Callback (GET)
+// @route   GET /api/v1/orders/paymob-response
+// @access  Public (but verified with HMAC)
+exports.paymobResponse = asyncHandler(async (req, res, next) => {
+  console.log("=".repeat(60));
+  console.log("PAYMOB RESPONSE REDIRECT RECEIVED");
+  console.log("=".repeat(60));
+  console.log("Query Parameters:", req.query);
+
+  const { 
+    success, 
+    merchant_order_id, 
+    hmac,
+    id: transactionId,
+    pending 
+  } = req.query;
+
+  // 1) VERIFY HMAC SIGNATURE
+  const isValid = paymobService.verifyResponseCallback(req.query);
+  
+  if (!isValid) {
+    console.error("❌ HMAC verification failed for response callback");
+    // Redirect to error page with reason
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/payment/error?reason=invalid_signature`
+    );
+  }
+  console.log("✅ HMAC verified for response callback");
+
+  // 2) FIND ORDER (optional - just for display)
+  let order = null;
+  if (merchant_order_id) {
+    order = await Order.findById(merchant_order_id);
+    console.log(order ? "✅ Order found" : "⚠️ Order not found");
+  }
+
+  // 3) REDIRECT USER BASED ON STATUS
+  const isPending = pending === "true";
+  const isSuccess = success === "true";
+
+  if (isPending) {
+    // Payment is still processing (3DS, etc.)
+    console.log("⏳ Redirecting to pending page");
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/payment/pending?orderId=${merchant_order_id}&transactionId=${transactionId}`
+    );
+  }
+
+  if (isSuccess) {
+    // Payment successful - show success page
+    console.log("✅ Redirecting to success page");
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/payment/success?orderId=${merchant_order_id}&transactionId=${transactionId}`
+    );
+  } else {
+    // Payment failed - show failure page
+    console.log("❌ Redirecting to failure page");
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/payment/failed?orderId=${merchant_order_id}&transactionId=${transactionId}`
+    );
+  }
+});
+
+
+
+
+
 // @desc    Create cash order
 // @route   POST /api/v1/orders/:cartId
 // @access  Protected/User
@@ -119,6 +397,7 @@ exports.createCardPayment = asyncHandler(async (req, res, next) => {
 
   // 5) Initiate Paymob payment
   const paymentResult = await paymobService.initiateCardPayment(
+    order._id,
     totalOrderPrice,
     billingData
   );
@@ -224,50 +503,7 @@ exports.createWalletPayment = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Paymob payment callback
-// @route   POST /api/v1/orders/paymob-callback
-// @access  Public
-exports.paymobCallback = asyncHandler(async (req, res, next) => {
-  const callbackData = req.body.obj || req.body;
 
-  // 1) Verify callback authenticity
-  const isValid = paymobService.verifyCallback(callbackData);
-  if (!isValid) {
-    return next(new ApiError("Invalid callback signature", 400));
-  }
-
-  // 2) Find order by Paymob order ID
-  const order = await Order.findOne({ paymobOrderId: callbackData.order });
-  if (!order) {
-    return next(new ApiError("Order not found", 404));
-  }
-
-  // 3) Update order based on payment status
-  if (callbackData.success === "true" || callbackData.success === true) {
-    order.isPaid = true;
-    order.paidAt = Date.now();
-    order.paymentStatus = "paid";
-    order.orderStatus = "processing";
-
-    // Decrement product quantity, increment sold
-    const bulkOption = order.cartItems.map((item) => ({
-      updateOne: {
-        filter: { _id: item.product },
-        update: { $inc: { quantity: -item.quantity, sold: +item.quantity } },
-      },
-    }));
-    await Product.bulkWrite(bulkOption, {});
-
-    // Clear the cart
-    await Cart.findByIdAndDelete(order.cart);
-  } else {
-    order.paymentStatus = "failed";
-  }
-
-  await order.save();
-
-  res.status(200).json({ status: "success" });
-});
 
 // @desc    Get all orders
 // @route   GET /api/v1/orders
@@ -411,36 +647,7 @@ exports.deleteOrder = asyncHandler(async (req, res, next) => {
   res.status(204).send();
 });
 
-// @desc    Paymob payment response (User Redirect - GET)
-// @route   GET /api/v1/orders/paymob-response
-// @access  Public
-exports.paymobResponse = asyncHandler(async (req, res, next) => {
-  console.log("Paymob Response Redirect:", req.query);
 
-  const { success, merchant_order_id, hmac } = req.query;
-
-  // 1) Verify HMAC
-  const isValid = paymobService.verifyResponseCallback(req.query);
-  if (!isValid) {
-    // Redirect to failure page
-    return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?reason=invalid_signature`);
-  }
-
-  // 2) Find order
-  const order = await Order.findById(merchant_order_id);
-  if (!order) {
-    return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?reason=order_not_found`);
-  }
-
-  // 3) Redirect based on success status
-  if (success === "true") {
-    // Redirect to success page
-    res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}`);
-  } else {
-    // Redirect to failure page
-    res.redirect(`${process.env.FRONTEND_URL}/payment/failed?orderId=${order._id}`);
-  }
-});
 
 // @desc    Get all orders
 // @route   GET /api/v1/orders
