@@ -12,7 +12,8 @@ const {
   verifyPassResetCode,
   resetPassword,
   verifyEmail,
-  resendVerification, // Add this import
+  resendVerification,
+  refreshToken, // Add this import
 } = require("../services/authService");
 
 const User = require("../models/userModel");
@@ -24,6 +25,7 @@ router.post("/login", loginValidator, login);
 router.post("/forgotPassword", forgotPassword);
 router.post("/verifyResetCode", verifyPassResetCode);
 router.put("/resetPassword", resetPassword);
+router.post("/refresh-token", refreshToken);
 
 // Email verification routes
 router.get("/verify-email/:token", verifyEmail);

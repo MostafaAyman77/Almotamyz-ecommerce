@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const sendEmail = require("../utils/sendEmail");
-const {createToken , genrateToken ,verify} = require("../utils/createToken");
+const {createToken , genrateToken ,verify, generateAuthTokens, getTokenSignature} = require("../utils/createToken");
 const User = require("../models/userModel");
 const { create, findOne, update } = require("./DB/db.services");
 
@@ -254,8 +254,7 @@ exports.resendVerification = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/auth/login
 // @access  Public
 exports.login = asyncHandler(async (req, res, next) => {
-  // 1) check if password and email in the body (validation)
-  // 2) check if user exist & check if password is correct
+  // 1) Check if user exists & password is correct
   const user = await findOne({
     model: User,
     filter: { email: req.body.email }
@@ -265,89 +264,134 @@ exports.login = asyncHandler(async (req, res, next) => {
     return next(new ApiError("Incorrect email or password", 401));
   }
 
-  // 3) Check if email is verified (optional - you can remove this if you want to allow login before verification)
+  // 2) Check if email is verified
   if (!user.isVerified) {
     return next(new ApiError("Please verify your email address before logging in", 401));
   }
 
-  // 4) generate token
-  const token = createToken(user._id);
+  // 3) Generate tokens based on user role
+  const { accessToken, refreshToken } = generateAuthTokens(user);
 
-  // Delete password from response
+  // 4) Prepare user response
   const userResponse = { ...user._doc };
   delete userResponse.password;
-  delete userResponse.emailVerifyToken;
 
-  // 5) send response to client side
-  res.status(200).json({ data: userResponse, token });
+  // 5) Send response with Bearer tokens
+  res.status(200).json({
+    data: userResponse,
+    tokens: {
+      accessToken,
+      refreshToken,
+    }
+  });
 });
-// @desc   make sure the user is logged in
+// @desc    Refresh token
+// @route   POST /api/v1/auth/refresh-token
+// @access  Public
+exports.refreshToken = asyncHandler(async (req, res, next) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return next(new ApiError("Refresh token is required", 400));
+  }
+
+  try {
+    // Verify refresh token
+    const decoded = verify({
+      token: refreshToken,
+      key: getTokenSignature(decoded.role, 'refresh')
+    });
+
+    // Find user
+    const user = await findOne({
+      model: User,
+      filter: { _id: decoded.userId }
+    });
+
+    if (!user) {
+      return next(new ApiError("User not found", 404));
+    }
+
+    // Generate new tokens
+    const { accessToken, refreshToken: newRefreshToken } = generateAuthTokens(user);
+
+    res.status(200).json({
+      accessToken,
+      refreshToken: newRefreshToken,
+      tokenType: 'Bearer'
+    });
+
+  } catch (err) {
+    return next(new ApiError("Invalid or expired refresh token", 401));
+  }
+});
+
+// @desc    Make sure the user is logged in
+// @access  Protected
 exports.protect = asyncHandler(async (req, res, next) => {
-  // 1) Check if token exist, if exist get
+  // 1) Check if token exists
   let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
+  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
     token = req.headers.authorization.split(" ")[1];
   }
+
   if (!token) {
-    return next(
-      new ApiError(
-        "You are not login, Please login to get access this route",
-        401
-      )
-    );
+    return next(new ApiError("You are not logged in. Please login to access this route", 401));
   }
 
-  // 2) Verify token (no change happens, expired token)
-  const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+  // 2) Verify token
+  let decoded;
+  try {
+    // First decode without verification to get role
+    const unverifiedDecoded = jwt.decode(token);
+    if (!unverifiedDecoded || !unverifiedDecoded.role) {
+      return next(new ApiError("Invalid token structure", 401));
+    }
+
+    // Verify with role-specific signature
+    decoded = verify({
+      token: token,
+      key: getTokenSignature(unverifiedDecoded.role, 'access')
+    });
+  } catch (err) {
+    return next(new ApiError("Invalid or expired token", 401));
+  }
 
   // 3) Check if user exists
-  const currentUser = await User.findById(decoded.userId);
+  const currentUser = await findOne({
+    model: User,
+    filter: { _id: decoded.userId }
+  });
+
   if (!currentUser) {
-    return next(
-      new ApiError(
-        "The user that belong to this token does no longer exist",
-        401
-      )
-    );
+    return next(new ApiError("The user that belongs to this token no longer exists", 401));
   }
 
-  // 4) Check if user change his password after token created
+  // 4) Check if user changed password after token was created
   if (currentUser.passwordChangedAt) {
     const passChangedTimestamp = parseInt(
       currentUser.passwordChangedAt.getTime() / 1000,
       10
     );
-    // Password changed after token created (Error)
     if (passChangedTimestamp > decoded.iat) {
-      return next(
-        new ApiError(
-          "User recently changed his password. please login again..",
-          401
-        )
-      );
+      return next(new ApiError("User recently changed password. Please login again", 401));
     }
   }
 
+  // 5) Attach user to request
   req.user = currentUser;
   next();
 });
 
 // @desc    Authorization (User Permissions)
-// ["admin", "manager"]
-exports.allowedTo = (...roles) =>
-  asyncHandler(async (req, res, next) => {
-    // 1) access roles
-    // 2) access registered user (req.user.role)
-    if (!roles.includes(req.user.role)) {
-      return next(
-        new ApiError("You are not allowed to access this route", 403)
-      );
-    }
-    next();
-  });
+// @access  Protected
+exports.allowedTo = (...roles) => asyncHandler(async (req, res, next) => {
+  // 1) Check if user role is included in allowed roles
+  if (!roles.includes(req.user.role)) {
+    return next(new ApiError("You are not allowed to access this route", 403));
+  }
+  next();
+});
 
 // @desc    Forgot password
 // @route   POST /api/v1/auth/forgotPassword
