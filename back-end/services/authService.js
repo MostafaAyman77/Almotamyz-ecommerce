@@ -12,27 +12,30 @@ const { create, findOne, update } = require("./DB/db.services");
 // @route   POST /api/v1/auth/signup
 // @access  Public
 exports.signup = asyncHandler(async (req, res, next) => {
-  // 1- Create user
+  // 1- Hash password before creating user
+  const hashedPassword = await bcrypt.hash(req.body.password, 12);
+
+  // 2- Create user with hashed password
   const user = await create({
     model: User,
     data: {
       name: req.body.name,
       email: req.body.email,
-      password: req.body.password,
+      password: hashedPassword,
     }
   });
 
-  // 2- Generate email verification token
+  // 3- Generate email verification token
   const emailVerifyToken = genrateToken({
     data: { _id: user._id, email: user.email },
     key: process.env.EMAIL_TOKEN_SIGNATURE,
     options: { expiresIn: process.env.EMAIL_TOKEN_EXPIRE_IN }
   });
 
-  // 3- Create verification URL
+  // 4- Create verification URL
   const verificationUrl = `${req.protocol}://${req.get('host')}/api/v1/auth/verify-email/${emailVerifyToken}`;
 
-  // 4- Send verification email with HTML
+  // 5- Send verification email with HTML
   const htmlMessage = `
     <!DOCTYPE html>
     <html>
@@ -86,7 +89,7 @@ exports.signup = asyncHandler(async (req, res, next) => {
     // Don't block user registration if email fails
   }
 
-  // 5- Delete sensitive information from response
+  // 6- Delete sensitive information from response
   const userResponse = { ...user._doc };
   delete userResponse.password;
 
@@ -259,6 +262,8 @@ exports.login = asyncHandler(async (req, res, next) => {
     model: User,
     filter: { email: req.body.email }
   });
+  const flag = await bcrypt.compare(req.body.password, user.password)
+
 
   if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
     return next(new ApiError("Incorrect email or password", 401));
@@ -338,7 +343,7 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
 exports.protect = asyncHandler(async (req, res, next) => {
   // 1) Check if token exists
   let bearerToken;
-  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+  if (req.headers.authorization) {
     bearerToken = req.headers.authorization;
   }
 
@@ -406,30 +411,39 @@ exports.allowedTo = (...roles) => asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/auth/forgotPassword
 // @access  Public
 exports.forgotPassword = asyncHandler(async (req, res, next) => {
-  // 1) Get user by email
-  const user = await User.findOne({ email: req.body.email });
+  // 1) Get user by email using DB service
+  const user = await findOne({
+    model: User,
+    filter: { email: req.body.email }
+  });
+
   if (!user) {
     return next(
       new ApiError(`There is no user with that email ${req.body.email}`, 404)
     );
   }
-  // 2) If user exist, Generate hash reset random 6 digits and save it in db
+
+  // 2) If user exists, generate hash reset random 6 digits and save it in db
   const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
   const hashedResetCode = crypto
     .createHash("sha256")
     .update(resetCode)
     .digest("hex");
 
-  // Save hashed password reset code into db
-  user.passwordResetCode = hashedResetCode;
-  // Add expiration time for password reset code (10 min)
-  user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
-  user.passwordResetVerified = false;
-
-  await user.save();
+  // Update user with reset code using DB service
+  await update({
+    model: User,
+    filter: { _id: user._id },
+    data: {
+      passwordResetCode: hashedResetCode,
+      passwordResetExpires: Date.now() + 10 * 60 * 1000, // 10 minutes
+      passwordResetVerified: false
+    }
+  });
 
   // 3) Send the reset code via email
   const message = `Hi ${user.name},\n We received a request to reset the password on your E-shop Account. \n ${resetCode} \n Enter this code to complete the reset. \n Thanks for helping us keep your account secure.\n The E-shop Team`;
+
   try {
     await sendEmail({
       email: user.email,
@@ -439,11 +453,16 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
   } catch (err) {
     console.error("🚨 Email sending error:", err);
 
-    user.passwordResetCode = undefined;
-    user.passwordResetExpires = undefined;
-    user.passwordResetVerified = undefined;
-
-    await user.save();
+    // Clear reset code if email fails using DB service
+    await update({
+      model: User,
+      filter: { _id: user._id },
+      data: {
+        passwordResetCode: undefined,
+        passwordResetExpires: undefined,
+        passwordResetVerified: undefined
+      }
+    });
 
     // Provide more specific error message based on the error type
     if (err.message.includes("Email credentials not configured")) {
@@ -474,26 +493,34 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/auth/verifyResetCode
 // @access  Public
 exports.verifyPassResetCode = asyncHandler(async (req, res, next) => {
-  // 1) Get user based on reset code
+  // 1) Get user based on reset code using DB service
   const hashedResetCode = crypto
     .createHash("sha256")
     .update(req.body.resetCode)
     .digest("hex");
 
-  const user = await User.findOne({
-    passwordResetCode: hashedResetCode,
-    passwordResetExpires: { $gt: Date.now() },
+  const user = await findOne({
+    model: User,
+    filter: {
+      passwordResetCode: hashedResetCode,
+      passwordResetExpires: { $gt: Date.now() },
+    }
   });
+
   if (!user) {
-    return next(new ApiError("Reset code invalid or expired"));
+    return next(new ApiError("Reset code invalid or expired", 400));
   }
 
-  // 2) Reset code valid
-  user.passwordResetVerified = true;
-  await user.save();
+  // 2) Reset code valid - update user using DB service
+  await update({
+    model: User,
+    filter: { _id: user._id },
+    data: { passwordResetVerified: true }
+  });
 
   res.status(200).json({
     status: "Success",
+    message: "Reset code verified successfully"
   });
 });
 
@@ -501,8 +528,12 @@ exports.verifyPassResetCode = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/auth/resetPassword
 // @access  Public
 exports.resetPassword = asyncHandler(async (req, res, next) => {
-  // 1) Get user based on email
-  const user = await User.findOne({ email: req.body.email });
+  // 1) Get user based on email using DB service
+  const user = await findOne({
+    model: User,
+    filter: { email: req.body.email }
+  });
+
   if (!user) {
     return next(
       new ApiError(`There is no user with email ${req.body.email}`, 404)
@@ -514,14 +545,59 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
     return next(new ApiError("Reset code not verified", 400));
   }
 
-  user.password = req.body.newPassword;
-  user.passwordResetCode = undefined;
-  user.passwordResetExpires = undefined;
-  user.passwordResetVerified = undefined;
+  // 3) Hash the new password before updating
+  const hashedPassword = await bcrypt.hash(req.body.newPassword, 12);
 
-  await user.save();
+  // 4) Update password and clear reset fields using DB service
+  const updatedUser = await update({
+    model: User,
+    filter: { _id: user._id },
+    data: {
+      password: hashedPassword,
+      passwordChangedAt: new Date(),
+      passwordResetCode: undefined,
+      passwordResetExpires: undefined,
+      passwordResetVerified: undefined
+    }
+  });
 
-  // 3) if everything is ok, generate token
-  const token = createToken(user._id);
-  res.status(200).json({ token });
+  // 5) Generate new tokens
+  const { accessToken, refreshToken } = generateAuthTokens(updatedUser);
+
+  // 6) Prepare user response
+  const userResponse = { ...updatedUser._doc };
+  delete userResponse.password;
+
+  res.status(200).json({
+    status: "Success",
+    message: "Password reset successfully",
+    data: userResponse,
+    tokens: {
+      accessToken,
+      refreshToken,
+    }
+  });
+});
+
+
+// @desc    Check if email exists
+// @route   GET /api/v1/auth/check-email/:email
+// @access  Public
+exports.checkEmail = asyncHandler(async (req, res, next) => {
+  const { email } = req.params;
+
+  // Find user by email
+  const user = await findOne({
+    model: User,
+    filter: { email: email.toLowerCase() }
+  });
+
+  res.status(200).json({
+    exists: !!user,
+    message: user ? "Email already registered" : "Email available",
+    data: {
+      email: email,
+      isVerified: user ? user.isVerified : false
+    }
+  });
 });

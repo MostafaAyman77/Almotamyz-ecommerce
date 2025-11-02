@@ -3,6 +3,12 @@ const asyncHandler = require("express-async-handler");
 const {
   signupValidator,
   loginValidator,
+  forgotPasswordValidator,
+  verifyResetCodeValidator,
+  resetPasswordValidator,
+  resendVerificationValidator,
+  refreshTokenValidator,
+  checkEmailValidator,
 } = require("../utils/validators/authValidator");
 
 const {
@@ -13,34 +19,29 @@ const {
   resetPassword,
   verifyEmail,
   resendVerification,
-  refreshToken, // Add this import
+  refreshToken,
+  checkEmail,
 } = require("../services/authService");
 
 const User = require("../models/userModel");
 
 const router = express.Router();
 
+// Authentication routes
 router.post("/signup", signupValidator, signup);
 router.post("/login", loginValidator, login);
-router.post("/forgotPassword", forgotPassword);
-router.post("/verifyResetCode", verifyPassResetCode);
-router.put("/resetPassword", resetPassword);
-router.post("/refresh-token", refreshToken);
+router.post("/refresh-token", refreshTokenValidator, refreshToken);
+``
+// Password reset routes
+router.post("/forgotPassword", forgotPasswordValidator, forgotPassword);
+router.post("/verifyResetCode", verifyResetCodeValidator, verifyPassResetCode);
+router.put("/resetPassword", resetPasswordValidator, resetPassword);
 
 // Email verification routes
 router.get("/verify-email/:token", verifyEmail);
-router.post("/resend-verification", resendVerification);
+// router.post("/resend-verification", resendVerificationValidator, resendVerification);
 
-// Check if email exists
-router.get(
-  "/check-email/:email",
-  asyncHandler(async (req, res) => {
-    const user = await User.findOne({ email: req.params.email });
-    res.json({
-      exists: !!user,
-      message: user ? "Email already registered" : "Email available",
-    });
-  })
-);
+// Utility routes
+router.get("/check-email/:email", checkEmailValidator, checkEmail);
 
 module.exports = router;

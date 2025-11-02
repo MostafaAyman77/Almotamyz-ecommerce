@@ -24,6 +24,7 @@ const {
 } = require("../services/userService");
 
 const authService = require("../services/authService");
+const { userRole } = require("../enum.js");
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ const router = express.Router();
 router.use(authService.protect);
 
 // User routes (for logged-in users)
-router.get("/getMe", getLoggedUserData, getUser);
+router.get("/getMe",getLoggedUserData, getUser);
 router.put("/changeMyPassword", updateLoggedUserPassword);
 router.put("/updateMe", updateLoggedUserValidator, updateLoggedUserData);
 router.delete("/deleteMe", deleteLoggedUserData);
