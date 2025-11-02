@@ -60,4 +60,21 @@ const generateAuthTokens = (user) => {
   return { accessToken, refreshToken };
 };
 
-module.exports = {genrateToken , createToken , verify , generateAuthTokens , getTokenSignature};
+
+
+const extractRoleAndToken = (bearerToken) => {
+  if (!bearerToken) return null;
+  
+  const parts = bearerToken.split(' ');
+  if (parts.length !== 2) return null;
+  
+  const [role, token] = parts;
+  
+  // Validate role
+  if (!Object.values(userRole).includes(role)) {
+    return null;
+  }
+  
+  return { role, token };
+};
+module.exports = {genrateToken , createToken , verify , generateAuthTokens , getTokenSignature , extractRoleAndToken};

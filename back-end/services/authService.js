@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const sendEmail = require("../utils/sendEmail");
-const {createToken , genrateToken ,verify, generateAuthTokens, getTokenSignature} = require("../utils/createToken");
+const {createToken , genrateToken ,verify, generateAuthTokens, getTokenSignature, extractRoleAndToken} = require("../utils/createToken");
 const User = require("../models/userModel");
 const { create, findOne, update } = require("./DB/db.services");
 
@@ -296,10 +296,18 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    // Verify refresh token
+    // Extract role and token from the refresh token
+    const tokenParts = extractRoleAndToken(refreshToken);
+    if (!tokenParts) {
+      return next(new ApiError("Invalid refresh token format", 400));
+    }
+
+    const { role, token } = tokenParts;
+
+    // Verify refresh token with role-specific signature
     const decoded = verify({
-      token: refreshToken,
-      key: getTokenSignature(decoded.role, 'refresh')
+      token: token,
+      key: getTokenSignature(role, 'refresh')
     });
 
     // Find user
@@ -318,7 +326,6 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
     res.status(200).json({
       accessToken,
       refreshToken: newRefreshToken,
-      tokenType: 'Bearer'
     });
 
   } catch (err) {
@@ -330,34 +337,35 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
 // @access  Protected
 exports.protect = asyncHandler(async (req, res, next) => {
   // 1) Check if token exists
-  let token;
+  let bearerToken;
   if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
-    token = req.headers.authorization.split(" ")[1];
+    bearerToken = req.headers.authorization;
   }
 
-  if (!token) {
+  if (!bearerToken) {
     return next(new ApiError("You are not logged in. Please login to access this route", 401));
   }
 
-  // 2) Verify token
+  // 2) Extract role and token from Bearer token
+  const tokenParts = extractRoleAndToken(bearerToken);
+  if (!tokenParts) {
+    return next(new ApiError("Invalid token format", 401));
+  }
+
+  const { role, token } = tokenParts;
+
+  // 3) Verify token with role-specific signature
   let decoded;
   try {
-    // First decode without verification to get role
-    const unverifiedDecoded = jwt.decode(token);
-    if (!unverifiedDecoded || !unverifiedDecoded.role) {
-      return next(new ApiError("Invalid token structure", 401));
-    }
-
-    // Verify with role-specific signature
     decoded = verify({
       token: token,
-      key: getTokenSignature(unverifiedDecoded.role, 'access')
+      key: getTokenSignature(role, 'access')
     });
   } catch (err) {
     return next(new ApiError("Invalid or expired token", 401));
   }
 
-  // 3) Check if user exists
+  // 4) Check if user exists
   const currentUser = await findOne({
     model: User,
     filter: { _id: decoded.userId }
@@ -367,7 +375,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
     return next(new ApiError("The user that belongs to this token no longer exists", 401));
   }
 
-  // 4) Check if user changed password after token was created
+  // 5) Check if user changed password after token was created
   if (currentUser.passwordChangedAt) {
     const passChangedTimestamp = parseInt(
       currentUser.passwordChangedAt.getTime() / 1000,
@@ -378,7 +386,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // 5) Attach user to request
+  // 6) Attach user to request
   req.user = currentUser;
   next();
 });
@@ -392,6 +400,7 @@ exports.allowedTo = (...roles) => asyncHandler(async (req, res, next) => {
   }
   next();
 });
+
 
 // @desc    Forgot password
 // @route   POST /api/v1/auth/forgotPassword
