@@ -33,8 +33,14 @@ const sendEmail = async (options) => {
     from: `E-shop App <${process.env.EMAIL_USER}>`,
     to: options.email,
     subject: options.subject,
-    text: options.message,
   };
+
+  // Support both text and HTML
+  if (options.html) {
+    mailOpts.html = options.html;
+  } else {
+    mailOpts.text = options.message;
+  }
 
   try {
     await transporter.sendMail(mailOpts);
