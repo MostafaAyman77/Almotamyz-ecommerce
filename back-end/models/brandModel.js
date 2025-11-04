@@ -13,9 +13,17 @@ const brandSchema = new mongoose.Schema({
         type: String,
         lowercase: true
     },
-    image: String
-}, 
-{ timestamps: true });
+    image: String,
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
+    }
+},
+    { timestamps: true });
 
 // 2- Create model
 const BrandModel = mongoose.model("Brand", brandSchema);
