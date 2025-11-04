@@ -257,31 +257,36 @@ exports.resendVerification = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/auth/login
 // @access  Public
 exports.login = asyncHandler(async (req, res, next) => {
-  // 1) Check if user exists & password is correct
+  // 1) Check if user exists
   const user = await findOne({
     model: User,
     filter: { email: req.body.email }
   });
-  const flag = await bcrypt.compare(req.body.password, user.password)
 
-
-  if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
+  if (!user) {
     return next(new ApiError("Incorrect email or password", 401));
   }
 
-  // 2) Check if email is verified
+  // 2) Check if password is correct
+  const isPasswordCorrect = await bcrypt.compare(req.body.password, user.password);
+  
+  if (!isPasswordCorrect) {
+    return next(new ApiError("Incorrect email or password", 401));
+  }
+
+  // 3) Check if email is verified
   if (!user.isVerified) {
     return next(new ApiError("Please verify your email address before logging in", 401));
   }
 
-  // 3) Generate tokens based on user role
+  // 4) Generate tokens based on user role
   const { accessToken, refreshToken } = generateAuthTokens(user);
 
-  // 4) Prepare user response
+  // 5) Prepare user response
   const userResponse = { ...user._doc };
   delete userResponse.password;
 
-  // 5) Send response with Bearer tokens
+  // 6) Send response with Bearer tokens
   res.status(200).json({
     data: userResponse,
     tokens: {

@@ -9,6 +9,7 @@ const {
   updateLoggedUserPasswordValidator,
   addAddressValidator,
   removeAddressValidator,
+  getUsersValidator,
 } = require('../utils/validators/userValidator');
 
 const {
@@ -143,12 +144,13 @@ router
   .route('/')
   .get(
     authService.allowedTo(userRole.admin, userRole.manager),
+    getUsersValidator,
     getUsers
   )
   .post(
     authService.allowedTo(userRole.admin, userRole.manager),
-    uploadUserImage,
-    resizeImage,
+    // uploadUserImage,
+    // resizeImage,
     createUserValidator,
     createUser
   );
@@ -163,8 +165,8 @@ router
   )
   .put(
     authService.allowedTo(userRole.admin, userRole.manager),
-    uploadUserImage,
-    resizeImage,
+    // uploadUserImage,
+    // resizeImage,
     updateUserValidator,
     updateUser
   )

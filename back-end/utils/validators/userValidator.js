@@ -42,7 +42,7 @@ exports.createUserValidator = [
     .withMessage('Password is required')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .matches(patterns.password)
     .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number'),
 
   check('passwordConfirm')
@@ -299,6 +299,43 @@ exports.removeAddressValidator = [
 
       return true;
     }),
+
+  validatorMiddleware,
+];
+
+exports.getUsersValidator = [
+  check('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer')
+    .toInt(),
+
+  check('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100')
+    .toInt(),
+
+  check('keyword')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('Keyword must not exceed 100 characters')
+    .trim(),
+
+  check('role')
+    .optional()
+    .isIn(Object.values(userRole))
+    .withMessage(`Role must be one of: ${Object.values(userRole).join(', ')}`),
+
+  check('active')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('Active must be either "true" or "false"'),
+
+  check('isVerified')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('IsVerified must be either "true" or "false"'),
 
   validatorMiddleware,
 ];

@@ -210,10 +210,10 @@ exports.changeUserPassword = asyncHandler(async (req, res, next) => {
 exports.deleteUser = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
-  const user = await dbService.findByIdAndDelete({
+  const user = await dbService.softDelete({
     model: User,
-    id
-  });
+    filter: { _id: id }
+  })
 
   if (!user) {
     return next(new ApiError(`No user found for id: ${id}`, 404));
@@ -283,7 +283,6 @@ exports.verifyUser = asyncHandler(async (req, res, next) => {
     id,
     data: {
       isVerified: true,
-      emailVerifyToken: undefined
     }
   });
 
@@ -461,16 +460,27 @@ exports.getUsersStatsByRole = asyncHandler(async (req, res) => {
           _id: '$role',
           count: { $sum: 1 }
         }
-      },
-      {
-        $sort: { count: -1 }
       }
     ]
   });
 
+  // Transform the array result into the desired object format
+  const result = {
+    user: 0,
+    manager: 0,
+    admin: 0,
+    total: 0
+  };
+
+  // Populate counts from the aggregation result
+  stats.forEach(roleStat => {
+    result[roleStat._id] = roleStat.count;
+    result.total += roleStat.count;
+  });
+
   res.status(200).json({
     status: 'success',
-    data: stats
+    data: result
   });
 });
 
