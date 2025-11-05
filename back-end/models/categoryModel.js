@@ -14,6 +14,14 @@ const categorySchema = new mongoose.Schema(
       lowercase: true,
     },
     image: String,
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
+    }
   },
   { timestamps: true }
 );

@@ -19,6 +19,14 @@ const subCategorySchema = new mongoose.Schema(
       ref: "Category",
       required: [true, "SubCategory must be belong to parent category"],
     },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
+    }
   },
   { timestamps: true }
 );
