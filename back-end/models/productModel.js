@@ -12,6 +12,7 @@ const productSchema = new mongoose.Schema({
         type: String,
         required: true,
         lowercase: true,
+        unique: true,
     },
     description: {
         type: String,
@@ -21,60 +22,91 @@ const productSchema = new mongoose.Schema({
     quantity: {
         type: Number,
         required: [true, "product quantity is required"],
+        min: [0, "Quantity cannot be negative"],
     },
     sold: {
         type: Number,
         default: 0,
+        min: [0, "Sold quantity cannot be negative"],
     },
     price: {
         type: Number,
         required: [true, "Product price is required"],
         trim: true,
+        min: [0, "Price cannot be negative"],
         max: [2000000, "Too long product price"],
     },
     priceAfterDiscount: {
         type: Number,
+        min: [0, "Discounted price cannot be negative"],
+        validate: {
+            validator: function (value) {
+                if (value) return value <= this.price;
+                return true;
+            },
+            message: "Discounted price cannot be higher than original price"
+        }
     },
     colors: [String],
-
     imageCover: {
         type: String,
-        required: [true, "Product image cover required"],
+        // required: [true, "Product image cover required"],
     },
     images: [String],
-    category: {
-        type: mongoose.Schema.ObjectId,
-        ref: "Category",
-        required: [true, "Product must be belong to category"],
-    },
-    subcategory: [{
+    subcategory: {
         type: mongoose.Schema.ObjectId,
         ref: "SubCategory",
-    }],
+        required: [true, "Product must be belong to a subcategory"],
+    },
     brand: {
         type: mongoose.Schema.ObjectId,
         ref: "Brand",
     },
-    ratingsAvarage: {
+    ratingsAverage: {
         type: Number,
         min: [1, "Rating must be above or equal 1.0"],
-        max: [5, "Rating must be bellow or equal 5.0"],
+        max: [5, "Rating must be below or equal 5.0"],
+        default: 1
     },
     ratingsQuantity: {
         type: Number,
         default: 0,
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
     }
-},
-    { timestamps: true }
-);
+}, { timestamps: true });
 
-// Mongoose Query Middleware
-productSchema.pre(/^find/, function(next) {
+// Mongoose Query Middleware to exclude deleted products
+productSchema.pre(/^find/, function (next) {
+    this.where({ isDeleted: { $ne: true } });
+    next();
+});
+
+productSchema.pre(/^find/, function (next) {
     this.populate({
-        path: "category",
-        select: "name -_id"
+        path: "subcategory",
+        select: "name category",
+        populate: {
+            path: "category",
+            select: "name"
+        }
+    }).populate({
+        path: "brand",
+        select: "name"
     });
     next();
 });
+
+// Index for better performance
+productSchema.index({ slug: 1 });
+productSchema.index({ subcategory: 1 });
+productSchema.index({ brand: 1 });
+productSchema.index({ isDeleted: 1 });
 
 module.exports = mongoose.model("Product", productSchema);

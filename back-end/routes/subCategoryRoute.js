@@ -30,7 +30,7 @@ const { userRole } = require("../enum.js");
 // mergeParams: Allow us to access parameters on other routers
 const router = express.Router({ mergeParams: true });
 
-// Nested route: /api/v1/categories/:categoryId/subcategories
+// Nested route: D:\FreeLance\Almotamyz-ecommerce\back-end\routess
 router
   .route("/")
   .post(
