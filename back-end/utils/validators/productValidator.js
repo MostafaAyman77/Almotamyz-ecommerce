@@ -66,9 +66,21 @@ exports.createProductValidator = [
             return true;
         }),
     
-    body("title").custom((val, { req }) => {
+    body("title").custom(async (val, { req }) => {
         if (val && !req.body.slug) {
-            req.body.slug = slugify(val);
+            const generatedSlug = slugify(val);
+            
+            // Check if the generated slug already exists
+            const existingProduct = await db.findNonDeleted({
+                model: Product,
+                filter: { slug: generatedSlug }
+            });
+            
+            if (existingProduct) {
+                throw new Error(`Slug '${generatedSlug}' already exists. Please provide a custom slug.`);
+            }
+            
+            req.body.slug = generatedSlug;
         }
         return true;
     }),
@@ -92,7 +104,7 @@ exports.createProductValidator = [
         .withMessage("Price must be a positive number"),
     
     check("priceAfterDiscount")
-        .optional()
+        .optional() // Changed from notEmpty() to optional()
         .isFloat({ min: 0 })
         .withMessage("Discounted price must be a positive number")
         .custom((value, { req }) => {
@@ -102,8 +114,6 @@ exports.createProductValidator = [
             return true;
         }),
     
-    // REMOVED: category validation
-    // ADDED: subcategory validation (now required and single reference)
     check("subcategory")
         .isMongoId()
         .withMessage("Invalid subcategory ID format")
@@ -120,19 +130,16 @@ exports.createProductValidator = [
         }),
     
     check("brand")
-        .optional()
-        .isMongoId()
+        .isMongoId() // Removed notEmpty() since isMongoId() already checks for presence
         .withMessage("Invalid brand ID format")
         .custom(async (value) => {
-            if (value) {
-                const brand = await db.findNonDeleted({
-                    model: Brand,
-                    filter: { _id: value }
-                });
-                
-                if (!brand) {
-                    throw new Error('Brand not found');
-                }
+            const brand = await db.findNonDeleted({
+                model: Brand,
+                filter: { _id: value }
+            });
+            
+            if (!brand) {
+                throw new Error('Brand not found');
             }
             return true;
         }),
@@ -608,29 +615,5 @@ exports.getDeletedProductsValidator = [
     .optional()
     .isIn(['deletedAt', '-deletedAt', 'createdAt', '-createdAt', 'title', '-title'])
     .withMessage('Invalid sort parameter. Allowed values: deletedAt, -deletedAt, createdAt, -createdAt, title, -title'),
-
-  // Date range for deletion
-  query('deletedFrom')
-    .optional()
-    .isISO8601()
-    .withMessage('Deleted from date must be a valid ISO 8601 date')
-    .custom((value, { req }) => {
-      if (req.query.deletedTo && new Date(value) > new Date(req.query.deletedTo)) {
-        throw new Error('Deleted from date cannot be after deleted to date');
-      }
-      return true;
-    }),
-
-  query('deletedTo')
-    .optional()
-    .isISO8601()
-    .withMessage('Deleted to date must be a valid ISO 8601 date')
-    .custom((value) => {
-      if (new Date(value) > new Date()) {
-        throw new Error('Deleted to date cannot be in the future');
-      }
-      return true;
-    }),
-
   validatorMiddleware,
 ];

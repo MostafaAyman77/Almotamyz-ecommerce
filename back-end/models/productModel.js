@@ -61,6 +61,7 @@ const productSchema = new mongoose.Schema({
     brand: {
         type: mongoose.Schema.ObjectId,
         ref: "Brand",
+        required : [true, "Product must be belong to a brand"],
     },
     ratingsAverage: {
         type: Number,
@@ -82,11 +83,11 @@ const productSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Mongoose Query Middleware to exclude deleted products
-productSchema.pre(/^find/, function (next) {
-    this.where({ isDeleted: { $ne: true } });
-    next();
-});
+// // Mongoose Query Middleware to exclude deleted products
+// productSchema.pre(/^find/, function (next) {
+//     this.where({ isDeleted: { $ne: true } });
+//     next();
+// });
 
 productSchema.pre(/^find/, function (next) {
     this.populate({
