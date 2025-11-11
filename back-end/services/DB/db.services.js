@@ -46,11 +46,17 @@ const update = async ({ model, filter = {}, data = {}, options = {} }) => {
         ...options 
     };
     
-    // Increment version and update timestamps
+    // Merge increment operators instead of overwriting
     const updateData = {
         ...data,
-        $inc: { __v: 1 }, // Automatically increment version
-        $set: { updatedAt: new Date() }
+        $inc: {
+            ...(data.$inc || {}), // Keep existing $inc operations
+            __v: 1 // Add version increment
+        },
+        $set: {
+            ...(data.$set || {}), // Keep existing $set operations
+            updatedAt: new Date()
+        }
     };
     
     return await model.findOneAndUpdate(filter, updateData, updateOptions);
@@ -62,11 +68,17 @@ const updateMany = async ({ model, filter = {}, data = {}, options = {} }) => {
         ...options 
     };
     
-    // Increment version for all updated documents
+    // Merge increment operators
     const updateData = {
         ...data,
-        $inc: { __v: 1 },
-        $set: { updatedAt: new Date() }
+        $inc: {
+            ...(data.$inc || {}),
+            __v: 1
+        },
+        $set: {
+            ...(data.$set || {}),
+            updatedAt: new Date()
+        }
     };
     
     const result = await model.updateMany(filter, updateData, updateOptions);
@@ -80,15 +92,22 @@ const findByIdAndUpdate = async ({ model, id, data = {}, options = {} }) => {
         ...options 
     };
     
-    // Increment version
+    // Merge increment operators
     const updateData = {
         ...data,
-        $inc: { __v: 1 },
-        $set: { updatedAt: new Date() }
+        $inc: {
+            ...(data.$inc || {}),
+            __v: 1
+        },
+        $set: {
+            ...(data.$set || {}),
+            updatedAt: new Date()
+        }
     };
     
     return await model.findByIdAndUpdate(id, updateData, updateOptions);
 }
+
 
 const deleteOne = async ({ model, filter = {}, options = {} }) => {
     return await model.findOneAndDelete(filter, options);

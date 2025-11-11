@@ -11,6 +11,7 @@ const {
   markReviewAsHelpful,
   getProductReviews,
   getUserReviews,
+  getReviewStats,
 } = require("../services/reviewService");
 
 const {
@@ -18,43 +19,68 @@ const {
   getReviewValidator,
   updateReviewValidator,
   deleteReviewValidator,
+  productReviewsValidator,
+  markHelpfulValidator,
+  reviewStatsValidator,
+  queryParamsValidator,
 } = require("../utils/validators/reviewValidator");
 
 const authService = require("../services/authService");
+const { userRole } = require("../enum.js");
 
 const router = express.Router({ mergeParams: true });
 
-router
-  .route("/")
-  .get(createFilterObj, getReviews)
-  .post(
-    authService.protect,
-    authService.allowedTo("user"),
-    setProductIdAndUserIdToBody,
-    createReviewValidator,
-    createReview
-  );
+// Public routes
+router.get("/", queryParamsValidator, createFilterObj, getReviews);
+router.get("/:id", getReviewValidator, getReview);
+
+// Product reviews routes
+router.get(
+  "/products/:productId/reviews", 
+  productReviewsValidator, 
+  queryParamsValidator, 
+  getProductReviews
+);
 
 // Protected routes
 router.use(authService.protect);
 
+// Create review
+router.post(
+  "/",
+  authService.allowedTo(userRole.user),
+  setProductIdAndUserIdToBody,
+  createReviewValidator,
+  createReview
+);
+
 // User routes
-router.get("/myReviews", authService.allowedTo("user"), getUserReviews);
+router.get(
+  "/my/reviews", 
+  authService.allowedTo(userRole.user), 
+  queryParamsValidator, 
+  getUserReviews
+);
 
 router.put(
   "/:id/helpful",
-  authService.allowedTo("user"),
-  getReviewValidator,
+  authService.allowedTo(userRole.user),
+  markHelpfulValidator,
   markReviewAsHelpful
 );
 
+// Review management routes
 router
   .route("/:id")
-  .get(getReviewValidator, getReview)
-  .put(authService.allowedTo("user"), updateReviewValidator, updateReview)
+  .put(
+    authService.allowedTo(userRole.user), 
+    updateReviewValidator, 
+    updateReview
+  )
   .delete(
-    authService.allowedTo("user", "manager", "admin"),
+    authService.allowedTo(userRole.user , userRole.admin , userRole.manager),
     deleteReviewValidator,
     deleteReview
   );
+
 module.exports = router;
