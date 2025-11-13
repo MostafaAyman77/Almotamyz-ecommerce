@@ -11,6 +11,7 @@ const {
   findWithPagination,
   softDelete,
   findNonDeleted,
+  restoreSoftDelete,
 } = require("./DB/db.services");
 
 // @desc    Create new coupon
