@@ -1,63 +1,60 @@
-const { check, param } = require('express-validator');
+const { check, body } = require('express-validator');
 const validatorMiddleware = require('../../middlewares/validatorMiddleware');
 const Coupon = require('./../../models/couponModel');
-const db = require('./../../services/DB/db.services.js');
 
-exports.getCouponValidator = [
-  param('id')
-    .isMongoId()
-    .withMessage('Invalid Coupon id format')
-    .custom(async (val, { req }) => {
-      const coupon = await db.findOne({
-        model: Coupon,
-        filter: { _id: val }
-      });
-      
-      if (!coupon) {
-        throw new Error('Coupon not found');
-      }
-      return true;
-    }),
-  validatorMiddleware,
-];
-
+// @desc    Validator for creating coupon
 exports.createCouponValidator = [
   check('name')
     .notEmpty()
     .withMessage('Coupon name is required')
-    .isLength({ min: 2 })
-    .withMessage('Too short coupon name')
-    .isLength({ max: 32 })
-    .withMessage('Too long coupon name')
-    .custom(async (val, { req }) => {
-      const existingCoupon = await db.findOne({
-        model: Coupon,
-        filter: { name: val.toUpperCase() }
-      });
-      
-      if (existingCoupon) {
-        throw new Error('Coupon with this name already exists');
+    .isLength({ min: 3, max: 50 })
+    .withMessage('Coupon name must be between 3 and 50 characters')
+    .custom(async (value) => {
+      const coupon = await Coupon.findOne({ name: value.toUpperCase() });
+      if (coupon) {
+        throw new Error('Coupon name already exists');
       }
       return true;
     }),
 
   check('expire')
     .notEmpty()
-    .withMessage('Coupon expire date is required')
+    .withMessage('Expiration date is required')
     .isISO8601()
     .withMessage('Invalid date format')
     .custom((value) => {
-      if (new Date(value) <= new Date()) {
-        throw new Error('Expire date must be in the future');
+      const expireDate = new Date(value);
+      const now = new Date();
+      if (expireDate <= now) {
+        throw new Error('Expiration date must be in the future');
       }
       return true;
     }),
 
+  check('discountType')
+    .optional()
+    .isIn(['percentage', 'fixed'])
+    .withMessage('Discount type must be either "percentage" or "fixed"'),
+
   check('discount')
     .notEmpty()
-    .withMessage('Coupon discount is required')
-    .isFloat({ min: 1, max: 100 })
-    .withMessage('Discount must be between 1 and 100'),
+    .withMessage('Discount value is required')
+    .isNumeric()
+    .withMessage('Discount must be a number')
+    .custom((value, { req }) => {
+      const discountType = req.body.discountType || 'percentage';
+      
+      if (discountType === 'percentage') {
+        if (value < 1 || value > 100) {
+          throw new Error('Percentage discount must be between 1 and 100');
+        }
+      } else {
+        if (value <= 0) {
+          throw new Error('Fixed amount discount must be greater than 0');
+        }
+      }
+      return true;
+    }),
 
   check('maxUses')
     .optional()
@@ -66,67 +63,53 @@ exports.createCouponValidator = [
 
   check('minOrderAmount')
     .optional()
+    .isNumeric()
+    .withMessage('Minimum order amount must be a number')
     .isFloat({ min: 0 })
-    .withMessage('Minimum order amount must be a positive number'),
+    .withMessage('Minimum order amount must be 0 or greater'),
 
   check('maxDiscountAmount')
     .optional()
+    .isNumeric()
+    .withMessage('Maximum discount amount must be a number')
     .isFloat({ min: 0 })
-    .withMessage('Maximum discount amount must be a positive number'),
-
-  check('applicableProducts')
-    .optional()
-    .isArray()
-    .withMessage('Applicable products must be an array'),
-
-  check('applicableProducts.*')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid product ID format'),
-
-  check('applicableCategories')
-    .optional()
-    .isArray()
-    .withMessage('Applicable categories must be an array'),
-
-  check('applicableCategories.*')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid category ID format'),
+    .withMessage('Maximum discount amount must be greater than 0')
+    .custom((value, { req }) => {
+      const discountType = req.body.discountType || 'percentage';
+      if (discountType === 'fixed' && value) {
+        throw new Error('Maximum discount amount is only applicable for percentage discounts');
+      }
+      return true;
+    }),
 
   validatorMiddleware,
 ];
 
-exports.updateCouponValidator = [
-  param('id')
+// @desc    Validator for getting coupon by ID
+exports.getCouponValidator = [
+  check('id')
     .isMongoId()
-    .withMessage('Invalid Coupon id format')
-    .custom(async (val, { req }) => {
-      const coupon = await db.findOne({
-        model: Coupon,
-        filter: { _id: val }
-      });
-      
-      if (!coupon) {
-        throw new Error('Coupon not found');
-      }
-      return true;
-    }),
-  
+    .withMessage('Invalid coupon ID format'),
+  validatorMiddleware,
+];
+
+// @desc    Validator for updating coupon
+exports.updateCouponValidator = [
+  check('id')
+    .isMongoId()
+    .withMessage('Invalid coupon ID format'),
+
   check('name')
     .optional()
-    .isLength({ min: 2 })
-    .withMessage('Too short coupon name')
-    .isLength({ max: 32 })
-    .withMessage('Too long coupon name')
-    .custom(async (val, { req }) => {
-      const existingCoupon = await db.findOne({
-        model: Coupon,
-        filter: { name: val.toUpperCase(), _id: { $ne: req.params.id } }
+    .isLength({ min: 3, max: 50 })
+    .withMessage('Coupon name must be between 3 and 50 characters')
+    .custom(async (value, { req }) => {
+      const coupon = await Coupon.findOne({
+        name: value.toUpperCase(),
+        _id: { $ne: req.params.id }
       });
-      
-      if (existingCoupon) {
-        throw new Error('Coupon with this name already exists');
+      if (coupon) {
+        throw new Error('Coupon name already exists');
       }
       return true;
     }),
@@ -136,16 +119,37 @@ exports.updateCouponValidator = [
     .isISO8601()
     .withMessage('Invalid date format')
     .custom((value) => {
-      if (new Date(value) <= new Date()) {
-        throw new Error('Expire date must be in the future');
+      const expireDate = new Date(value);
+      const now = new Date();
+      if (expireDate <= now) {
+        throw new Error('Expiration date must be in the future');
       }
       return true;
     }),
 
+  check('discountType')
+    .optional()
+    .isIn(['percentage', 'fixed'])
+    .withMessage('Discount type must be either "percentage" or "fixed"'),
+
   check('discount')
     .optional()
-    .isFloat({ min: 1, max: 100 })
-    .withMessage('Discount must be between 1 and 100'),
+    .isNumeric()
+    .withMessage('Discount must be a number')
+    .custom((value, { req }) => {
+      const discountType = req.body.discountType || 'percentage';
+      
+      if (discountType === 'percentage') {
+        if (value < 1 || value > 100) {
+          throw new Error('Percentage discount must be between 1 and 100');
+        }
+      } else {
+        if (value <= 0) {
+          throw new Error('Fixed amount discount must be greater than 0');
+        }
+      }
+      return true;
+    }),
 
   check('maxUses')
     .optional()
@@ -154,137 +158,96 @@ exports.updateCouponValidator = [
 
   check('minOrderAmount')
     .optional()
+    .isNumeric()
+    .withMessage('Minimum order amount must be a number')
     .isFloat({ min: 0 })
-    .withMessage('Minimum order amount must be a positive number'),
+    .withMessage('Minimum order amount must be 0 or greater'),
 
   check('maxDiscountAmount')
     .optional()
+    .isNumeric()
+    .withMessage('Maximum discount amount must be a number')
     .isFloat({ min: 0 })
-    .withMessage('Maximum discount amount must be a positive number'),
-
-  check('applicableProducts')
-    .optional()
-    .isArray()
-    .withMessage('Applicable products must be an array'),
-
-  check('applicableProducts.*')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid product ID format'),
-
-  check('applicableCategories')
-    .optional()
-    .isArray()
-    .withMessage('Applicable categories must be an array'),
-
-  check('applicableCategories.*')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid category ID format'),
-
-  validatorMiddleware,
-];
-
-exports.deleteCouponValidator = [
-  param('id')
-    .isMongoId()
-    .withMessage('Invalid Coupon id format')
-    .custom(async (val, { req }) => {
-      const coupon = await db.findOne({
-        model: Coupon,
-        filter: { _id: val }
-      });
-      
-      if (!coupon) {
-        throw new Error('Coupon not found');
+    .withMessage('Maximum discount amount must be greater than 0')
+    .custom((value, { req }) => {
+      const discountType = req.body.discountType || 'percentage';
+      if (discountType === 'fixed' && value) {
+        throw new Error('Maximum discount amount is only applicable for percentage discounts');
       }
       return true;
     }),
+
+  check('isActive')
+    .optional()
+    .isBoolean()
+    .withMessage('isActive must be a boolean value'),
+
   validatorMiddleware,
 ];
 
-exports.validateCouponValidator = [
-  check('couponName')
+// @desc    Validator for deleting coupon
+exports.deleteCouponValidator = [
+  check('id')
+    .isMongoId()
+    .withMessage('Invalid coupon ID format'),
+  validatorMiddleware,
+];
+
+// @desc    Validator for validating/applying coupon
+exports.validateApplyCouponValidator = [
+  body('couponName')
     .notEmpty()
     .withMessage('Coupon name is required')
-    .isLength({ min: 2 })
-    .withMessage('Invalid coupon name'),
-  
-  check('orderAmount')
+    .isString()
+    .withMessage('Coupon name must be a string'),
+
+  body('totalAmount')
     .notEmpty()
-    .withMessage('Order amount is required')
+    .withMessage('Total amount is required')
+    .isNumeric()
+    .withMessage('Total amount must be a number')
     .isFloat({ min: 0 })
-    .withMessage('Order amount must be a positive number'),
-
-  check('productIds')
-    .optional()
-    .isArray()
-    .withMessage('Product IDs must be an array'),
-
-  check('productIds.*')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid product ID format'),
+    .withMessage('Total amount must be greater than or equal to 0'),
 
   validatorMiddleware,
 ];
 
-exports.incrementUsageValidator = [
-  param('id')
+// @desc    Validator for applying coupon with ID
+exports.applyCouponWithIdValidator = [
+  check('id')
     .isMongoId()
-    .withMessage('Invalid Coupon id format')
-    .custom(async (val, { req }) => {
-      const coupon = await db.findOne({
-        model: Coupon,
-        filter: { _id: val }
-      });
-      
-      if (!coupon) {
-        throw new Error('Coupon not found');
-      }
-      
-      if (!coupon.isValid()) {
-        throw new Error('Cannot use expired or inactive coupon');
-      }
-      return true;
-    }),
+    .withMessage('Invalid coupon ID format'),
+
+  body('totalAmount')
+    .notEmpty()
+    .withMessage('Total amount is required')
+    .isNumeric()
+    .withMessage('Total amount must be a number')
+    .isFloat({ min: 0 })
+    .withMessage('Total amount must be greater than or equal to 0'),
+
   validatorMiddleware,
 ];
 
-exports.toggleStatusValidator = [
-  param('id')
+// @desc    Validator for toggling coupon active status
+exports.toggleCouponActiveValidator = [
+  check('id')
     .isMongoId()
-    .withMessage('Invalid Coupon id format')
-    .custom(async (val, { req }) => {
-      const coupon = await db.findOne({
-        model: Coupon,
-        filter: { _id: val }
-      });
-      
-      if (!coupon) {
-        throw new Error('Coupon not found');
-      }
-      return true;
-    }),
+    .withMessage('Invalid coupon ID format'),
   validatorMiddleware,
 ];
 
-// Query parameter validators
-exports.queryParamsValidator = [
+// @desc    Validator for pagination queries
+exports.paginationValidator = [
   check('page')
     .optional()
     .isInt({ min: 1 })
     .withMessage('Page must be a positive integer'),
-  
+
   check('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
     .withMessage('Limit must be between 1 and 100'),
-  
-  check('sort')
-    .optional()
-    .isIn(['createdAt', '-createdAt', 'name', '-name', 'discount', '-discount', 'expire', '-expire'])
-    .withMessage('Sort must be a valid field'),
-  
+
   validatorMiddleware,
 ];

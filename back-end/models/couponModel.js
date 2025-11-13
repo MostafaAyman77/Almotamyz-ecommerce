@@ -12,11 +12,25 @@ const couponSchema = new mongoose.Schema({
         type: Date,
         required: [true, 'Coupon expire time is required'],
     },
+    discountType: {
+        type: String,
+        enum: ['percentage', 'fixed'],
+        required: [true, 'Discount type is required'],
+        default: 'percentage'
+    },
     discount: {
         type: Number,
         required: [true, 'Coupon discount value is required'],
-        min: [1, 'Discount must be at least 1%'],
-        max: [100, 'Discount cannot exceed 100%'],
+        validate: {
+            validator: function(value) {
+                if (this.discountType === 'percentage') {
+                    return value >= 1 && value <= 100;
+                } else {
+                    return value > 0;
+                }
+            },
+            message: 'Discount must be between 1-100 for percentage or greater than 0 for fixed amount'
+        }
     },
     maxUses: {
         type: Number,
@@ -36,16 +50,8 @@ const couponSchema = new mongoose.Schema({
     },
     maxDiscountAmount: {
         type: Number,
-        default: null, // null means no maximum discount limit
+        default: null, // Only applicable for percentage discounts
     },
-    applicableProducts: [{
-        type: mongoose.Schema.ObjectId,
-        ref: 'Product',
-    }],
-    applicableCategories: [{
-        type: mongoose.Schema.ObjectId,
-        ref: 'SubCategory',
-    }],
     createdBy: {
         type: mongoose.Schema.ObjectId,
         ref: 'User',
@@ -66,9 +72,34 @@ couponSchema.methods.isValid = function () {
     const now = new Date();
     return (
         this.isActive &&
+        !this.isDeleted &&
         this.expire > now &&
         (this.maxUses === null || this.usedCount < this.maxUses)
     );
+};
+
+// Calculate discount amount
+couponSchema.methods.calculateDiscount = function (totalAmount) {
+    let discountAmount = 0;
+    
+    if (this.discountType === 'percentage') {
+        discountAmount = (totalAmount * this.discount) / 100;
+        
+        // Apply maximum discount limit if set
+        if (this.maxDiscountAmount && discountAmount > this.maxDiscountAmount) {
+            discountAmount = this.maxDiscountAmount;
+        }
+    } else {
+        // Fixed amount discount
+        discountAmount = this.discount;
+        
+        // Ensure discount doesn't exceed total amount
+        if (discountAmount > totalAmount) {
+            discountAmount = totalAmount;
+        }
+    }
+    
+    return discountAmount;
 };
 
 // Increment used count
@@ -81,15 +112,17 @@ couponSchema.methods.toPublicJSON = function () {
     return {
         id: this._id,
         name: this.name,
+        discountType: this.discountType,
         discount: this.discount,
         expire: this.expire,
         minOrderAmount: this.minOrderAmount,
         maxDiscountAmount: this.maxDiscountAmount,
-        // Don't expose: usedCount, maxUses, createdBy, etc.
+        maxUses: this.maxUses,
+        usedCount: this.usedCount,
+        isActive: this.isActive
     };
 };
 
 const Coupon = mongoose.model('Coupon', couponSchema);
 
 module.exports = Coupon;
-

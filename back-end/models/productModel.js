@@ -110,4 +110,6 @@ productSchema.index({ subcategory: 1 });
 productSchema.index({ brand: 1 });
 productSchema.index({ isDeleted: 1 });
 
-module.exports = mongoose.model("Product", productSchema);
+const Product = mongoose.model("Product", productSchema);
+
+module.exports = Product;
