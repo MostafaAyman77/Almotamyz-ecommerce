@@ -44,17 +44,25 @@ const couponSchema = new mongoose.Schema({
     }],
     applicableCategories: [{
         type: mongoose.Schema.ObjectId,
-        ref: 'Category',
+        ref: 'SubCategory',
     }],
     createdBy: {
         type: mongoose.Schema.ObjectId,
         ref: 'User',
         required: true,
     },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
+    }
 }, { timestamps: true });
 
 // Check if coupon is valid
-couponSchema.methods.isValid = function() {
+couponSchema.methods.isValid = function () {
     const now = new Date();
     return (
         this.isActive &&
@@ -64,9 +72,21 @@ couponSchema.methods.isValid = function() {
 };
 
 // Increment used count
-couponSchema.methods.incrementUsage = function() {
+couponSchema.methods.incrementUsage = function () {
     this.usedCount += 1;
     return this.save();
+};
+
+couponSchema.methods.toPublicJSON = function () {
+    return {
+        id: this._id,
+        name: this.name,
+        discount: this.discount,
+        expire: this.expire,
+        minOrderAmount: this.minOrderAmount,
+        maxDiscountAmount: this.maxDiscountAmount,
+        // Don't expose: usedCount, maxUses, createdBy, etc.
+    };
 };
 
 const Coupon = mongoose.model('Coupon', couponSchema);

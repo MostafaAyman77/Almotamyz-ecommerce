@@ -1,54 +1,45 @@
 const express = require("express");
-
 const {
-  getCoupon,
-  getCoupons,
   createCoupon,
+  getAllCoupons,
+  getCoupon,
   updateCoupon,
   deleteCoupon,
   validateCoupon,
-  getActiveCoupons,
-  incrementCouponUsage,
-  toggleCouponStatus,
+  toggleCouponActive,
+  getMyCoupons,
+  applyCoupon,
 } = require("../services/couponService");
-
-const authService = require("../services/authService");
-
-const {
-  getCouponValidator,
-  createCouponValidator,
-  updateCouponValidator,
-  deleteCouponValidator,
-  validateCouponValidator,
-  incrementUsageValidator,
-  toggleStatusValidator,
-  queryParamsValidator,
-} = require("../utils/validators/couponValidator");
+const { protect, allowedTo } = require("../services/authService");
 const { userRole } = require("../enum.js");
 
 const router = express.Router();
 
-// ===== Public Routes =====
-router.get("/active", queryParamsValidator, getActiveCoupons);
-router.post("/validate", validateCouponValidator, validateCoupon);
+// Protect all routes
+// router.use(protect);
 
-// ===== Protected Routes =====
-router.use(authService.protect);
+// Admin only routes
+// router.use(allowedTo(userRole.admin));
 
-// Admin/Manager routes
-router.use(authService.allowedTo(userRole.admin, userRole.manager));
+router
+  .route("/")
+  .post(protect , allowedTo(userRole.admin),createCoupon)
+  .get(protect , allowedTo(userRole.admin) ,getAllCoupons);
 
-router.route("/")
-  .get(queryParamsValidator, getCoupons)
-  .post(createCouponValidator, createCoupon);
+router
+  .route("/my-coupons")
+  .get(protect , allowedTo(userRole.admin),getMyCoupons);
 
-router.route("/:id")
-  .get(getCouponValidator, getCoupon)
-  .put(updateCouponValidator, updateCoupon)
-  .delete(deleteCouponValidator, deleteCoupon);
+router
+  .route("/:id")
+  .get(protect , allowedTo(userRole.admin),getCoupon)
+  .patch(protect , allowedTo(userRole.admin) ,updateCoupon)
+  .delete(protect , allowedTo(userRole.admin) , deleteCoupon);
 
-// Additional coupon management routes
-router.put("/:id/increment-usage", incrementUsageValidator, incrementCouponUsage);
-router.put("/:id/toggle-status", toggleStatusValidator, toggleCouponStatus);
+router.patch("/:id/toggle-active", protect , allowedTo(userRole.admin),toggleCouponActive);
+router.post("/:id/apply", protect , allowedTo(userRole.user) ,applyCoupon);
+
+// Public validation route (protected but not admin restricted)
+router.post("/validate", protect , allowedTo(userRole.user),validateCoupon);
 
 module.exports = router;

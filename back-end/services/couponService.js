@@ -1,317 +1,394 @@
-const asyncHandler = require('express-async-handler');
-const db = require('./DB/db.services');
-const ApiError = require('../utils/apiError');
-const Coupon = require('../models/couponModel');
+const Coupon = require("../models/couponModel");
+const ApiError = require("../utils/apiError");
+const asyncHandler = require("express-async-handler");
+const {
+  create,
+  findOne,
+  findById,
+  update,
+  findByIdAndUpdate,
+  findByIdAndDelete,
+  findWithPagination,
+  softDelete,
+  findNonDeleted,
+} = require("./DB/db.services");
 
-// @desc    Get list of coupons
-// @route   GET /api/v1/coupons
-// @access  Private/Admin-Manager
-exports.getCoupons = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, sort = '-createdAt' } = req.query;
-  
-  // Build sort object
-  const sortObj = {};
-  if (sort) {
-    const sortFields = sort.split(',');
-    sortFields.forEach(field => {
-      if (field.startsWith('-')) {
-        sortObj[field.slice(1)] = -1;
-      } else {
-        sortObj[field] = 1;
-      }
-    });
-  }
-
-  const result = await db.findWithPagination({
-    model: Coupon,
-    filter: {},
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sort: sortObj
-  });
-
-  res.status(200).json({
-    status: 'success',
-    results: result.data.length,
-    pagination: result.pagination,
-    data: result.data,
-  });
-});
-
-// @desc    Get specific coupon by id
-// @route   GET /api/v1/coupons/:id
-// @access  Private/Admin-Manager
-exports.getCoupon = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
-  
-  const coupon = await db.findOne({
-    model: Coupon,
-    filter: { _id: id },
-    options: { lean: true }
-  });
-
-  if (!coupon) {
-    return next(new ApiError(`No coupon found with id: ${id}`, 404));
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: coupon,
-  });
-});
-
-// @desc    Create coupon
-// @route   POST  /api/v1/coupons
-// @access  Private/Admin-Manager
+// @desc    Create new coupon
+// @route   POST /api/coupons
+// @access  Private/Admin
 exports.createCoupon = asyncHandler(async (req, res, next) => {
-  // Add the user who created the coupon
-  req.body.createdBy = req.user._id;
-  
-  // Convert name to uppercase
-  if (req.body.name) {
-    req.body.name = req.body.name.toUpperCase();
-  }
+  const {
+    name,
+    expire,
+    discount,
+    maxUses,
+    minOrderAmount,
+    maxDiscountAmount,
+    applicableProducts,
+    applicableCategories,
+  } = req.body;
 
-  // Check if coupon with same name already exists
-  const existingCoupon = await db.findOne({
+  // Check if coupon name already exists
+  const existingCoupon = await findOne({
     model: Coupon,
-    filter: { name: req.body.name }
+    filter: { name: name.toUpperCase() }
   });
 
   if (existingCoupon) {
-    return next(new ApiError('Coupon with this name already exists', 400));
+    return next(new ApiError("Coupon name already exists", 400));
   }
 
-  const coupon = await db.create({
+  const coupon = await create({
     model: Coupon,
-    data: req.body
+    data: {
+      name: name.toUpperCase(),
+      expire,
+      discount,
+      maxUses: maxUses || null,
+      minOrderAmount: minOrderAmount || 0,
+      maxDiscountAmount: maxDiscountAmount || null,
+      applicableProducts: applicableProducts || [],
+      applicableCategories: applicableCategories || [],
+      createdBy: req.user._id,
+    }
   });
+
+  // Populate the created coupon
+  const populatedCoupon = await findById({
+    model: Coupon,
+    id: coupon._id
+  })
+  
+  console.log(populatedCoupon.toPublicJSON())
 
   res.status(201).json({
-    status: 'success',
-    data: coupon,
+    status: "success",
+    data: {
+      coupon: populatedCoupon.toPublicJSON(),
+    },
   });
 });
 
-// @desc    Update specific coupon
-// @route   PUT /api/v1/coupons/:id
-// @access  Private/Admin-Manager
-exports.updateCoupon = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
+// @desc    Get all coupons with pagination
+// @route   GET /api/coupons
+// @access  Private/Admin
+exports.getAllCoupons = asyncHandler(async (req, res, next) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const sort = req.query.sort || { createdAt: -1 };
 
-  // Check if coupon exists
-  const existingCoupon = await db.findOne({
+  const result = await findWithPagination({
     model: Coupon,
-    filter: { _id: id }
+    page,
+    limit,
+    sort,
+    select: "-__v"
   });
 
-  if (!existingCoupon) {
-    return next(new ApiError(`No coupon found with id: ${id}`, 404));
-  }
-
-  // Convert name to uppercase if provided
-  if (req.body.name) {
-    req.body.name = req.body.name.toUpperCase();
-    
-    // Check if another coupon with same name exists (excluding current coupon)
-    const duplicateCoupon = await db.findOne({
-      model: Coupon,
-      filter: { name: req.body.name, _id: { $ne: id } }
-    });
-
-    if (duplicateCoupon) {
-      return next(new ApiError('Coupon with this name already exists', 400));
-    }
-  }
-
-  const updatedCoupon = await db.findByIdAndUpdate({
-    model: Coupon,
-    id: id,
-    data: req.body
-  });
+  // Populate each coupon
+  const populatedCoupons = await Promise.all(
+    result.data.map(async (coupon) => {
+      return await findById({
+        model: Coupon,
+        id: coupon._id
+      })
+    })
+  );
 
   res.status(200).json({
-    status: 'success',
-    data: updatedCoupon,
+    status: "success",
+    results: result.pagination.totalCount,
+    pagination: result.pagination,
+    data: {
+      coupons: populatedCoupons.map(coupon => coupon.toPublicJSON()),
+    },
   });
 });
 
-// @desc    Delete specific coupon
-// @route   DELETE /api/v1/coupons/:id
-// @access  Private/Admin-Manager
-exports.deleteCoupon = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
-
-  const coupon = await db.findOne({
+// @desc    Get single coupon
+// @route   GET /api/coupons/:id
+// @access  Private/Admin
+exports.getCoupon = asyncHandler(async (req, res, next) => {
+  const coupon = await findById({
     model: Coupon,
-    filter: { _id: id }
-  });
+    id: req.params.id
+  })
 
   if (!coupon) {
-    return next(new ApiError(`No coupon found with id: ${id}`, 404));
+    return next(new ApiError("Coupon not found", 404));
   }
 
-  await db.findByIdAndDelete({
-    model: Coupon,
-    id: id
+  res.status(200).json({
+    status: "success",
+    data: {
+      coupon: coupon.toPublicJSON(),
+    },
   });
+});
 
-  res.status(204).send();
+// @desc    Update coupon
+// @route   PATCH /api/coupons/:id
+// @access  Private/Admin
+exports.updateCoupon = asyncHandler(async (req, res, next) => {
+  const { name, ...updateData } = req.body;
+
+  // If name is being updated, check for uniqueness
+  if (name) {
+    const existingCoupon = await findOne({
+      model: Coupon,
+      filter: {
+        name: name.toUpperCase(),
+        _id: { $ne: req.params.id }
+      }
+    });
+
+    if (existingCoupon) {
+      return next(new ApiError("Coupon name already exists", 400));
+    }
+    updateData.name = name.toUpperCase();
+  }
+
+  const coupon = await findByIdAndUpdate({
+    model: Coupon,
+    id: req.params.id,
+    data: updateData,
+    options: { new: true, runValidators: true }
+  })
+
+  if (!coupon) {
+    return next(new ApiError("Coupon not found", 404));
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      coupon: coupon.toPublicJSON(),
+    },
+  });
+});
+
+// @desc    Delete coupon
+// @route   DELETE /api/coupons/:id
+// @access  Private/Admin
+exports.deleteCoupon = asyncHandler(async (req, res, next) => {
+  const coupon = await softDelete(
+    {
+      model: Coupon,
+      filter : {_id: req.params.id}
+    }
+  );
+
+  if (!coupon) {
+    return next(new ApiError("Coupon not found", 404));
+  }
+
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
 });
 
 // @desc    Validate coupon
-// @route   POST /api/v1/coupons/validate
-// @access  Private/User
+// @route   POST /api/coupons/validate
+// @access  Private
 exports.validateCoupon = asyncHandler(async (req, res, next) => {
-  const { couponName, orderAmount, productIds = [] } = req.body;
+  const { couponName, products, totalAmount } = req.body;
 
-  const coupon = await db.findOne({
+  const coupon = await findOne({
     model: Coupon,
     filter: { name: couponName.toUpperCase() }
-  });
+  })
 
   if (!coupon) {
-    return next(new ApiError('Coupon not found', 404));
+    return next(new ApiError("Invalid coupon", 400));
   }
 
+  // Check if coupon is valid using the model method
   if (!coupon.isValid()) {
-    return next(new ApiError('Coupon is invalid or expired', 400));
+    return next(new ApiError("Coupon is expired or inactive", 400));
   }
 
-  if (orderAmount < coupon.minOrderAmount) {
+  // Check minimum order amount
+  if (totalAmount < coupon.minOrderAmount) {
     return next(
       new ApiError(
-        `Minimum order amount should be ${coupon.minOrderAmount}`,
+        `Minimum order amount for this coupon is ${coupon.minOrderAmount}`,
         400
       )
     );
   }
 
-  // Check if coupon is applicable to specific products
-  if (coupon.applicableProducts && coupon.applicableProducts.length > 0) {
-    if (productIds.length === 0) {
-      return next(new ApiError('This coupon is only applicable to specific products', 400));
-    }
+  // Check if products are applicable
+  if (coupon.applicableProducts.length > 0 || coupon.applicableCategories.length > 0) {
+    const productIds = products.map(p => p.productId.toString());
+    const productCategories = products.map(p => p.subcategoryId.toString());
     
-    const hasApplicableProduct = productIds.some(productId => 
-      coupon.applicableProducts.includes(productId)
+    const hasApplicableProduct = coupon.applicableProducts.some(productId =>
+      productIds.includes(productId.toString())
     );
     
-    if (!hasApplicableProduct) {
-      return next(new ApiError('This coupon is not applicable to the selected products', 400));
+    const hasApplicableCategory = coupon.applicableCategories.some(categoryId =>
+      productCategories.includes(categoryId.toString())
+    );
+
+    if (!hasApplicableProduct && !hasApplicableCategory) {
+      return next(new ApiError("Coupon not applicable to selected products", 400));
     }
   }
 
-  let discountAmount = (orderAmount * coupon.discount) / 100;
+  // Calculate discount
+  let discountAmount = (totalAmount * coupon.discount) / 100;
+  
+  // Apply maximum discount limit if set
+  if (coupon.maxDiscountAmount && discountAmount > coupon.maxDiscountAmount) {
+    discountAmount = coupon.maxDiscountAmount;
+  }
+
+  const finalAmount = totalAmount - discountAmount;
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      isValid: true,
+      coupon: coupon.toPublicJSON(),
+      discountAmount,
+      finalAmount,
+      originalAmount: totalAmount,
+    },
+  });
+});
+
+// @desc    Toggle coupon active status
+// @route   PATCH /api/coupons/:id/toggle-active
+// @access  Private/Admin
+exports.toggleCouponActive = asyncHandler(async (req, res, next) => {
+  const coupon = await findById({
+    model: Coupon,
+    id: req.params.id
+  });
+
+  if (!coupon) {
+    return next(new ApiError("Coupon not found", 404));
+  }
+
+  const updatedCoupon = await update({
+    model: Coupon,
+    filter: { _id: req.params.id },
+    data: { isActive: !coupon.isActive }
+  })
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      coupon: updatedCoupon.toPublicJSON(),
+    },
+  });
+});
+
+// @desc    Get coupons by creator
+// @route   GET /api/coupons/my-coupons
+// @access  Private/Admin
+exports.getMyCoupons = asyncHandler(async (req, res, next) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const sort = req.query.sort || { createdAt: -1 };
+
+  const result = await findWithPagination({
+    model: Coupon,
+    filter: { createdBy: req.user._id },
+    page,
+    limit,
+    sort,
+    select: "-__v"
+  });
+
+  // Populate each coupon
+  const populatedCoupons = await Promise.all(
+    result.data.map(async (coupon) => {
+      return await findById({
+        model: Coupon,
+        id: coupon._id
+      })
+    })
+  );
+
+  res.status(200).json({
+    status: "success",
+    results: result.pagination.totalCount,
+    pagination: result.pagination,
+    data: {
+      coupons: populatedCoupons.map(coupon => coupon.toPublicJSON()),
+    },
+  });
+});
+
+// @desc    Apply coupon and increment usage
+// @route   POST /api/coupons/:id/apply
+// @access  Private
+exports.applyCoupon = asyncHandler(async (req, res, next) => {
+  const { products, totalAmount } = req.body;
+
+  const coupon = await findNonDeleted({
+    model: Coupon,
+    filter : {_id : req.params.id}
+  });
+
+  if (!coupon) {
+    return next(new ApiError("Coupon not found", 404));
+  }
+
+  // Validate coupon
+  if (!coupon.isValid()) {
+    return next(new ApiError("Coupon is expired or inactive", 400));
+  }
+
+  if (totalAmount < coupon.minOrderAmount) {
+    return next(
+      new ApiError(
+        `Minimum order amount for this coupon is ${coupon.minOrderAmount}`,
+        400
+      )
+    );
+  }
+
+  // Check product applicability if specified
+  if (coupon.applicableProducts.length > 0 || coupon.applicableCategories.length > 0) {
+    const productIds = products.map(p => p.productId.toString());
+    const productCategories = products.map(p => p.subcategoryId.toString());
+    
+    const hasApplicableProduct = coupon.applicableProducts.some(productId =>
+      productIds.includes(productId.toString())
+    );
+    
+    const hasApplicableCategory = coupon.applicableCategories.some(categoryId =>
+      productCategories.includes(categoryId.toString())
+    );
+
+    if (!hasApplicableProduct && !hasApplicableCategory) {
+      return next(new ApiError("Coupon not applicable to selected products", 400));
+    }
+  }
+
+  // Calculate discount
+  let discountAmount = (totalAmount * coupon.discount) / 100;
   
   if (coupon.maxDiscountAmount && discountAmount > coupon.maxDiscountAmount) {
     discountAmount = coupon.maxDiscountAmount;
   }
 
-  const finalAmount = orderAmount - discountAmount;
+  const finalAmount = totalAmount - discountAmount;
+
+  // Increment usage count
+  await coupon.incrementUsage();
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {
-      coupon: {
-        id: coupon._id,
-        name: coupon.name,
-        discount: coupon.discount,
-        discountAmount,
-        finalAmount,
-        maxDiscountAmount: coupon.maxDiscountAmount,
-        minOrderAmount: coupon.minOrderAmount,
-      },
+      isValid: true,
+      coupon: coupon.toPublicJSON(),
+      discountAmount,
+      finalAmount,
+      originalAmount: totalAmount,
     },
-  });
-});
-
-// @desc    Get active coupons
-// @route   GET /api/v1/coupons/active
-// @access  Public
-exports.getActiveCoupons = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 20 } = req.query;
-
-  const filter = {
-    isActive: true,
-    expire: { $gt: new Date() },
-    $or: [
-      { maxUses: null },
-      { $expr: { $lt: ['$usedCount', '$maxUses'] } }
-    ]
-  };
-
-  const result = await db.findWithPagination({
-    model: Coupon,
-    filter: filter,
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sort: { createdAt: -1 },
-    select: 'name discount expire minOrderAmount maxDiscountAmount maxUses usedCount'
-  });
-
-  res.status(200).json({
-    status: 'success',
-    results: result.data.length,
-    pagination: result.pagination,
-    data: result.data,
-  });
-});
-
-// @desc    Increment coupon usage
-// @route   PUT /api/v1/coupons/:id/increment-usage
-// @access  Private/Admin-Manager
-exports.incrementCouponUsage = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
-
-  const coupon = await db.findOne({
-    model: Coupon,
-    filter: { _id: id }
-  });
-
-  if (!coupon) {
-    return next(new ApiError(`No coupon found with id: ${id}`, 404));
-  }
-
-  if (!coupon.isValid()) {
-    return next(new ApiError('Cannot use expired or inactive coupon', 400));
-  }
-
-  const updatedCoupon = await db.findByIdAndUpdate({
-    model: Coupon,
-    id: id,
-    data: { $inc: { usedCount: 1 } }
-  });
-
-  res.status(200).json({
-    status: 'success',
-    data: updatedCoupon,
-  });
-});
-
-// @desc    Toggle coupon status
-// @route   PUT /api/v1/coupons/:id/toggle-status
-// @access  Private/Admin-Manager
-exports.toggleCouponStatus = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
-
-  const coupon = await db.findOne({
-    model: Coupon,
-    filter: { _id: id }
-  });
-
-  if (!coupon) {
-    return next(new ApiError(`No coupon found with id: ${id}`, 404));
-  }
-
-  const updatedCoupon = await db.findByIdAndUpdate({
-    model: Coupon,
-    id: id,
-    data: { isActive: !coupon.isActive }
-  });
-
-  res.status(200).json({
-    status: 'success',
-    data: updatedCoupon,
   });
 });
