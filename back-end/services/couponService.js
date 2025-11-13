@@ -64,6 +64,7 @@ exports.getAllCoupons = asyncHandler(async (req, res, next) => {
 
   const result = await findWithPagination({
     model: Coupon,
+    filter : { isDeleted: { $ne: true } },
     page,
     limit,
     sort,
@@ -93,9 +94,9 @@ exports.getAllCoupons = asyncHandler(async (req, res, next) => {
 // @route   GET /api/coupons/:id
 // @access  Private/Admin
 exports.getCoupon = asyncHandler(async (req, res, next) => {
-  const coupon = await findById({
+  const coupon = await findNonDeleted({
     model: Coupon,
-    id: req.params.id
+    filter: {id: req.params.id}
   });
 
   if (!coupon) {
@@ -127,7 +128,7 @@ exports.updateCoupon = asyncHandler(async (req, res, next) => {
     options: { new: true, runValidators: true }
   });
 
-  if (!coupon) {
+  if (!coupon || coupon.isDeleted) {
     return next(new ApiError("Coupon not found", 404));
   }
 
@@ -206,9 +207,9 @@ exports.validateCoupon = asyncHandler(async (req, res, next) => {
 // @route   PATCH /api/coupons/:id/toggle-active
 // @access  Private/Admin
 exports.toggleCouponActive = asyncHandler(async (req, res, next) => {
-  const coupon = await findById({
+  const coupon = await findNonDeleted({
     model: Coupon,
-    id: req.params.id
+    filter : {_id: req.params.id}
   });
 
   if (!coupon) {
@@ -239,7 +240,7 @@ exports.getMyCoupons = asyncHandler(async (req, res, next) => {
 
   const result = await findWithPagination({
     model: Coupon,
-    filter: { createdBy: req.user._id },
+    filter: { createdBy: req.user._id , isDeleted: false},
     page,
     limit,
     sort,
@@ -308,6 +309,28 @@ exports.applyCoupon = asyncHandler(async (req, res, next) => {
       discountAmount,
       finalAmount,
       originalAmount: totalAmount,
+    },
+  });
+});
+
+
+// @desc    Restore soft deleted coupon
+// @route   PATCH /api/coupons/:id/restore
+// @access  Private/Admin
+exports.restoreCoupon = asyncHandler(async (req, res, next) => {
+  const coupon = await restoreSoftDelete({
+    model: Coupon,
+    filter: { _id: req.params.id }
+  });
+
+  if (!coupon) {
+    return next(new ApiError("Coupon not found", 404));
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      coupon: coupon.toPublicJSON(),
     },
   });
 });

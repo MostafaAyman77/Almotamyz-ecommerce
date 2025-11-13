@@ -9,6 +9,7 @@ const {
   toggleCouponActive,
   getMyCoupons,
   applyCoupon,
+  restoreCoupon,
 } = require("../services/couponService");
 const { protect, allowedTo } = require("../services/authService");
 const { userRole } = require("../enum.js");
@@ -81,6 +82,14 @@ router
     deleteCoupon
   );
 
+// Restore soft deleted coupon
+router.patch(
+  "/:id/restore",
+  protect,
+  allowedTo(userRole.admin),
+  getCouponValidator,
+  restoreCoupon
+);
 // Toggle coupon active status
 router.patch(
   "/:id/toggle-active",
