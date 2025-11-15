@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const PaymobService = require('./../services/paymentServices');
+const PaymobService = require('../services/paymentServices');
 
 const paymob = new PaymobService();
 
