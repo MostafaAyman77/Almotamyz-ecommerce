@@ -1,62 +1,53 @@
 const mongoose = require("mongoose");
 
+const cartItemSchema = new mongoose.Schema({
+  product: {
+    type: mongoose.Schema.ObjectId,
+    ref: "Product",
+    required: true,
+  },
+  quantity: {
+    type: Number,
+    default: 1,
+    min: [1, "Quantity cannot be less than 1"],
+  },
+  price: {
+    type: Number,
+    required: true,
+  },
+  color: {
+    type: String,
+    required: false,
+  }
+});
+
 const cartSchema = new mongoose.Schema(
   {
-    cartItems: [
-      {
-        product: {
-          type: mongoose.Schema.ObjectId,
-          ref: "Product",
-          required: true,
-        },
-        quantity: {
-          type: Number,
-          default: 1,
-        },
-        color: String,
-        price: {
-          type: Number,
-          required: true,
-        },
-      },
-    ],
+    cartItems: [cartItemSchema],
     totalCartPrice: {
       type: Number,
       default: 0,
     },
-    totalPriceAfterDiscount: Number,
-    // Support both authenticated users and guest users
     user: {
       type: mongoose.Schema.ObjectId,
       ref: "User",
-      required: false, // Make it optional for guest carts
-    },
-    guestId: {
-      type: String,
-      required: false, // For guest carts
-      index: true,
+      required: true,
+      unique: true,
     },
   },
   { timestamps: true }
 );
 
-// Ensure either user or guestId is present
-cartSchema.pre("save", function (next) {
-  if (!this.user && !this.guestId) {
-    return next(new Error("Cart must have either user or guestId"));
-  }
-  if (this.user && this.guestId) {
-    return next(new Error("Cart cannot have both user and guestId"));
-  }
-  next();
-});
+// Static method to calculate total price
+cartSchema.statics.calculateTotalPrice = function(cartItems) {
+  return cartItems.reduce((total, item) => {
+    return total + (item.price * item.quantity);
+  }, 0);
+};
 
-// Populate product details when querying cart
-cartSchema.pre(/^find/, function (next) {
-  this.populate({
-    path: "cartItems.product",
-    select: "title imageCover price",
-  });
+// Pre-save middleware to calculate total price
+cartSchema.pre('save', function(next) {
+  this.totalCartPrice = this.constructor.calculateTotalPrice(this.cartItems);
   next();
 });
 

@@ -1,31 +1,39 @@
+// orderModel.js (updated)
 const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema(
   {
-    // Direct reference to user (from cart)
     user: {
       type: mongoose.Schema.ObjectId,
       ref: "User",
       required: [true, "Order must belong to user"],
     },
-    // Reference to the cart that was used to create this order
     cart: {
       type: mongoose.Schema.ObjectId,
       ref: "Cart",
       required: [true, "Order must reference a cart"],
     },
-    // Snapshot of cart items at time of order (in case cart is deleted/modified)
-    cartItems: [
-      {
-        product: {
-          type: mongoose.Schema.ObjectId,
-          ref: "Product",
-        },
-        quantity: Number,
-        color: String,
-        price: Number,
+    coupon: { // Fixed typo
+      type: mongoose.Schema.ObjectId,
+      ref: "Coupon"
+    },
+    // Store cart items snapshot at time of order
+    cartItems: [{
+      product: {
+        type: mongoose.Schema.ObjectId,
+        ref: "Product",
+        required: true,
       },
-    ],
+      quantity: {
+        type: Number,
+        required: true,
+      },
+      price: {
+        type: Number,
+        required: true,
+      },
+      color: String
+    }],
     shippingAddress: {
       details: String,
       phone: String,
@@ -35,6 +43,9 @@ const orderSchema = new mongoose.Schema(
     totalOrderPrice: {
       type: Number,
       required: true,
+    },
+    totalPriceAfterDiscount: { // Added for discount tracking
+      type: Number,
     },
     paymentMethodType: {
       type: String,
@@ -61,24 +72,40 @@ const orderSchema = new mongoose.Schema(
       default: false,
     },
     deliveredAt: Date,
+    // Soft delete fields
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+    deletedAt: {
+      type: Date,
+      default: null
+    }
   },
   { timestamps: true }
 );
 
 // Populate relationships when querying
 orderSchema.pre(/^find/, function (next) {
+  // Only populate non-deleted documents
+  this.find({ isDeleted: { $ne: true } });
+  
   this.populate({
     path: "user",
     select: "name email phone",
   })
-    .populate({
-      path: "cart",
-      select: "totalCartPrice totalPriceAfterDiscount",
-    })
-    .populate({
-      path: "cartItems.product",
-      select: "title imageCover price",
-    });
+  .populate({
+    path: "cart",
+    select: "totalCartPrice",
+  })
+  .populate({
+    path: "coupon",
+    select: "name discount discountType",
+  })
+  .populate({
+    path: "cartItems.product",
+    select: "title imageCover price",
+  });
   next();
 });
 

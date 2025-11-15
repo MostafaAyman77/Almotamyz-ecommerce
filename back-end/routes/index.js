@@ -8,9 +8,9 @@ const reviewRoute = require('./reviewRoute');
 const wishlistRoute = require('./wishlistRoute');
 const addressRoute = require('./addressRoute');
 const couponRoute = require('./couponRoute');
-const cartRoute = require('./Cart/cartRoute');
+const cartRoute = require('./cartRoute');
 const orderRoute = require('./../routes/Order/orderRoute');
-const guestRoute = require('./guestRoute');
+// const guestRoute = require('./guestRoute');
 const paymentRoute = require('./paymentRoute');
 
 const mountRoutes = (app) => {
@@ -26,7 +26,7 @@ const mountRoutes = (app) => {
   app.use('/api/v1/coupons', couponRoute);
   app.use('/api/v1/cart', cartRoute);
   app.use('/api/v1/orders', orderRoute);
-  app.use('/api/v1/guest', guestRoute);
+  // app.use('/api/v1/guest', guestRoute);
   app.use('/api/v1/payment', paymentRoute);
 };
 

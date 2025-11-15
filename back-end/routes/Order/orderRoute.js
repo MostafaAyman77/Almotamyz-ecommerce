@@ -1,89 +1,27 @@
 const express = require("express");
-
-const {
-    createCashOrder,
-    createCardPayment,
-    createWalletPayment,
-    paymobCallback,
-    getAllOrders,
-    getOrder,
-    updateOrderToPaid,
-    updateOrderToDelivered,
-    cancelOrder,
-    deleteOrder,
-} = require("./../../services/Order/orderServices");
-
-const authService = require("./../../services/authService");
-
-const {
-    createOrderValidator,
-    createWalletPaymentValidator,
-    getOrderValidator,
-    updateOrderValidator,
-} = require("./../../utils/validators/order/orderValidator");
-
 const router = express.Router();
+const { createOrder, getMyOrders, getOrder, cancelOrder, getAllOrders, updateOrderStatus, updatePaymentStatus, deleteOrder, getOrderStats } = require("../../services/Order/orderServices.js");
+const { protect, allowedTo } = require("../../services/authService.js");
+const { userRole } = require("../../enum.js");
 
-// Public route for Paymob callback
-router.post("/paymob-callback", paymobCallback);
-
-// Protected routes - require authentication
-router.use(authService.protect);
+// All routes are protected
+router.use(protect);
 
 // User routes
-router.post(
-    "/:cartId",
-    authService.allowedTo("user"),
-    createCashOrder
-);
+router.use(allowedTo(userRole.user));
+router.post("/", createOrder);
+router.get("/my-orders", getMyOrders);
+router.get("/:id", getOrder);
+router.patch("/:id/cancel", cancelOrder);
 
-router.post(
-    "/:cartId/pay-card",
-    authService.allowedTo("user"),
-    createCardPayment
-);
+// Admin routes
+router.use(allowedTo(userRole.admin));
+router.get("/", getAllOrders);
+router.patch("/:id/status", updateOrderStatus);
+router.patch("/:id/payment-status", updatePaymentStatus);
+router.delete("/:id", deleteOrder);
+router.get("/stats/overview", getOrderStats);
 
-router.post(
-    "/:cartId/pay-wallet",
-    authService.allowedTo("user"),
-    createWalletPayment
-);
 
-router.get(
-    "/",
-    authService.allowedTo("user", "admin", "manager"),
-    getAllOrders
-);
-
-router.get(
-    "/:id",
-    authService.allowedTo("user", "admin", "manager"),
-    getOrder
-);
-
-router.put(
-    "/:id/cancel",
-    authService.allowedTo("user", "admin", "manager"),
-    cancelOrder
-);
-
-// Admin/Manager only routes
-router.put(
-    "/:id/pay",
-    authService.allowedTo("admin", "manager"),
-    updateOrderToPaid
-);
-
-router.put(
-    "/:id/deliver",
-    authService.allowedTo("admin", "manager"),
-    updateOrderToDelivered
-);
-
-router.delete(
-    "/:id",
-    authService.allowedTo("admin"),
-    deleteOrder
-);
 
 module.exports = router;

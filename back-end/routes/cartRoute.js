@@ -1,39 +1,37 @@
 const express = require('express');
-
 const {
-    addProductToCart,
-    getLoggedUserCart,
-    removeSpecificCartItem,
-    clearCart,
-    updateCartItemQuantity,
-    applyCoupon,
+  addProductToCart,
+  getUserCart,
+  removeCartItem,
+  clearCart,
+  updateCartItemQuantity,
+  getCartSummary,
 } = require('../services/cartService');
 
 const authService = require('../services/authService');
-
 const {
-    addProductToCartValidator,
-    removeCartItemValidator,
-    updateCartItemQuantityValidator,
+  addProductToCartValidator,
+  removeCartItemValidator,
+  updateCartItemQuantityValidator,
 } = require('../utils/validators/cartValidator');
+const { userRole } = require('../enum');
 
 const router = express.Router();
 
-// Cart routes are now public (support both authenticated users and guests)
-// Authentication is handled within the service functions
-router.use(authService.protect , authService.allowedTo('user'));
-router
-    .route('/')
-    .post(addProductToCartValidator, addProductToCart)
-    .get(getLoggedUserCart)
-    .delete(clearCart);
-
-router.put('/applyCoupon', applyCoupon);
+// All cart routes require authentication and user role
+router.use(authService.protect, authService.allowedTo(userRole.user));
 
 router
-    .route('/:itemId')
-    .put(updateCartItemQuantityValidator, updateCartItemQuantity)
-    .delete(removeCartItemValidator, removeSpecificCartItem);
+  .route('/')
+  .post(addProductToCartValidator, addProductToCart)
+  .get(getUserCart)
+  .delete(clearCart);
+
+router.get('/summary', getCartSummary);
+
+router
+  .route('/:itemId')
+  .put(updateCartItemQuantityValidator, updateCartItemQuantity)
+  .delete(removeCartItemValidator, removeCartItem);
 
 module.exports = router;
-

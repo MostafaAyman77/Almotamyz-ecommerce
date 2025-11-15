@@ -1,119 +1,142 @@
 const asyncHandler = require("express-async-handler");
-
 const ApiError = require("../utils/apiError");
+const db = require("./DB/db.services");
 const Cart = require("../models/cartModel");
 const Product = require("../models/productModel");
-const Coupon = require("../models/couponModel");
-const {
-  generateGuestId,
-  getGuestIdFromRequest,
-  setGuestIdCookie,
-  getCartIdentifier,
-} = require("../utils/guestUtils");
 
-const calcTotalCartPrice = (cart) => {
-  let totalPrice = 0;
-  cart.cartItems.forEach((item) => {
-    totalPrice += item.quantity * item.price;
+// Validate product availability and stock
+const validateProductStock = async (productId, requestedQuantity, color = null) => {
+  const product = await db.findOne({
+    model: Product,
+    filter: { 
+      _id: productId, 
+      isDeleted: { $ne: true }
+    }
   });
-  cart.totalCartPrice = totalPrice;
-  cart.totalPriceAfterDiscount = undefined;
-  return totalPrice;
-};
-
-// @desc    Add product to cart
-// @route   POST /api/v1/cart
-// @access  Public (supports both authenticated users and guests)
-exports.addProductToCart = asyncHandler(async (req, res, next) => {
-  const { productId, color } = req.body;
-  const product = await Product.findById(productId);
 
   if (!product) {
-    return next(new ApiError("Product not found", 404));
+    throw new ApiError("Product not found", 404);
   }
 
-  // Get cart identifier (user ID for authenticated users, guest ID for guests)
-  let cartIdentifier;
-  let guestId = null;
+  if (product.quantity < requestedQuantity) {
+    throw new ApiError(`Only ${product.quantity} items available in stock`, 400);
+  }
 
-  if (req.user) {
-    // Authenticated user
-    cartIdentifier = { user: req.user._id };
-  } else {
-    // Guest user
-    guestId = getGuestIdFromRequest(req);
-    if (!guestId) {
-      // Generate new guest ID for new guest
-      guestId = generateGuestId();
-      setGuestIdCookie(res, guestId);
+  // Validate color if provided
+  if (color && product.colors && product.colors.length > 0) {
+    if (!product.colors.includes(color)) {
+      throw new ApiError(`Color ${color} is not available for this product`, 400);
     }
-    cartIdentifier = { guestId };
   }
 
-  // 1) Get Cart for user or guest
-  let cart = await Cart.findOne(cartIdentifier);
+  return product;
+};
+
+// Helper function to update cart with recalculated total price
+const updateCartWithTotalPrice = async (cartId, cartItems) => {
+  const totalCartPrice = Cart.calculateTotalPrice(cartItems);
+  
+  return await db.update({
+    model: Cart,
+    filter: { _id: cartId },
+    data: { 
+      cartItems: cartItems,
+      totalCartPrice: totalCartPrice
+    }
+  });
+};
+
+// @desc    Add product to cart or update quantity
+// @route   POST /api/v1/cart
+// @access  Private/User
+exports.addProductToCart = asyncHandler(async (req, res, next) => {
+  const { productId, color, quantity = 1 } = req.body;
+  const userId = req.user._id;
+
+  // Validate product and stock
+  const product = await validateProductStock(productId, quantity, color);
+
+  // Find or create user cart (ensures one cart per user)
+  let cart = await db.findOne({
+    model: Cart,
+    filter: { user: userId }
+  });
 
   if (!cart) {
-    // create cart with product
-    cart = await Cart.create({
-      ...cartIdentifier,
-      cartItems: [{ product: productId, color, price: product.price }],
+    // Create new cart with calculated total price
+    const cartItems = [{
+      product: productId,
+      color,
+      price: product.price,
+      quantity: parseInt(quantity)
+    }];
+    
+    const totalCartPrice = Cart.calculateTotalPrice(cartItems);
+    
+    cart = await db.create({
+      model: Cart,
+      data: {
+        user: userId,
+        cartItems: cartItems,
+        totalCartPrice: totalCartPrice
+      }
     });
   } else {
-    // product exist in cart, update product quantity
-    const productIndex = cart.cartItems.findIndex(
-      (item) => item.product.toString() === productId && item.color === color
+    // Check if product already exists in cart
+    const existingItemIndex = cart.cartItems.findIndex(
+      item => item.product.toString() === productId && item.color === color
     );
 
-    if (productIndex > -1) {
-      const cartItem = cart.cartItems[productIndex];
-      cartItem.quantity += 1;
+    let updatedCartItems = [...cart.cartItems];
 
-      cart.cartItems[productIndex] = cartItem;
+    if (existingItemIndex > -1) {
+      // Update quantity if product exists
+      const newQuantity = cart.cartItems[existingItemIndex].quantity + parseInt(quantity);
+      
+      // Re-validate stock for updated quantity
+      await validateProductStock(productId, newQuantity, color);
+      
+      updatedCartItems[existingItemIndex].quantity = newQuantity;
     } else {
-      // product not exist in cart, push product to cartItems array
-      cart.cartItems.push({ product: productId, color, price: product.price });
+      // Add new item to cart
+      updatedCartItems.push({
+        product: productId,
+        color,
+        price: product.price,
+        quantity: parseInt(quantity)
+      });
     }
+
+    // Update existing cart with recalculated total price
+    cart = await updateCartWithTotalPrice(cart._id, updatedCartItems);
   }
 
-  // Calculate total cart price
-  calcTotalCartPrice(cart);
-  await cart.save();
+  // Populate the cart before sending response
+  const populatedCart = await db.populate({
+    model: Cart,
+    query: cart,
+    path: 'cartItems.product',
+    select: 'title imageCover brand'
+  });
 
   res.status(200).json({
     status: "success",
     message: "Product added to cart successfully",
     numOfCartItems: cart.cartItems.length,
-    data: cart,
-    guestId: guestId, // Return guest ID for frontend storage
+    data: populatedCart,
   });
 });
 
-// @desc    Get user or guest cart
+// @desc    Get user cart
 // @route   GET /api/v1/cart
-// @access  Public (supports both authenticated users and guests)
-exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
-  // Get cart identifier (user ID for authenticated users, guest ID for guests)
-  let cartIdentifier;
+// @access  Private/User
+exports.getUserCart = asyncHandler(async (req, res, next) => {
+  const userId = req.user._id;
 
-  if (req.user) {
-    // Authenticated user
-    cartIdentifier = { user: req.user._id };
-  } else {
-    // Guest user
-    const guestId = getGuestIdFromRequest(req);
-    if (!guestId) {
-      return res.status(200).json({
-        status: "success",
-        numOfCartItems: 0,
-        data: null,
-        message: "No cart found for guest",
-      });
-    }
-    cartIdentifier = { guestId };
-  }
-
-  const cart = await Cart.findOne(cartIdentifier);
+  const cart = await db.findOne({
+    model: Cart,
+    filter: { user: userId }
+  });
 
   if (!cart) {
     return res.status(200).json({
@@ -124,152 +147,183 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
     });
   }
 
+  // Populate product details
+  const populatedCart = await db.populate({
+    model: Cart,
+    query: cart,
+    path: 'cartItems.product',
+    select: 'title  brand  -_id'
+  });
+
   res.status(200).json({
     status: "success",
-    numOfCartItems: cart.cartItems.length,
-    data: cart,
+    numOfCartItems: populatedCart.cartItems.length,
+    data: populatedCart,
   });
 });
 
 // @desc    Remove specific cart item
 // @route   DELETE /api/v1/cart/:itemId
-// @access  Public (supports both authenticated users and guests)
-exports.removeSpecificCartItem = asyncHandler(async (req, res, next) => {
-  const cartIdentifier = getCartIdentifier(req);
+// @access  Private/User
+exports.removeCartItem = asyncHandler(async (req, res, next) => {
+  const userId = req.user._id;
 
-  const cart = await Cart.findOneAndUpdate(
-    cartIdentifier,
-    {
-      $pull: { cartItems: { _id: req.params.itemId } },
-    },
-    { new: true }
-  );
+  const cart = await db.findOne({
+    model: Cart,
+    filter: { user: userId }
+  });
 
   if (!cart) {
     return next(new ApiError("Cart not found", 404));
   }
 
-  calcTotalCartPrice(cart);
-  await cart.save();
+  // Find item to remove
+  const itemIndex = cart.cartItems.findIndex(
+    item => item._id.toString() === req.params.itemId
+  );
+
+  if (itemIndex === -1) {
+    return next(new ApiError("Cart item not found", 404));
+  }
+
+  // Remove item from cartItems array
+  const updatedCartItems = [...cart.cartItems];
+  updatedCartItems.splice(itemIndex, 1);
+
+  // Update cart with recalculated total price
+  const updatedCart = await updateCartWithTotalPrice(cart._id, updatedCartItems);
+
+  // Populate before response
+  const populatedCart = await db.populate({
+    model: Cart,
+    query: updatedCart,
+    path: 'cartItems.product',
+    select: 'title imageCover brand'
+  });
 
   res.status(200).json({
     status: "success",
-    numOfCartItems: cart.cartItems.length,
-    data: cart,
+    message: "Item removed from cart successfully",
+    numOfCartItems: populatedCart.cartItems.length,
+    data: populatedCart,
   });
 });
 
-// @desc    Clear user or guest cart
+// @desc    Clear user cart
 // @route   DELETE /api/v1/cart
-// @access  Public (supports both authenticated users and guests)
+// @access  Private/User
 exports.clearCart = asyncHandler(async (req, res, next) => {
-  const cartIdentifier = getCartIdentifier(req);
-  await Cart.findOneAndDelete(cartIdentifier);
-  res.status(204).send();
+  const userId = req.user._id;
+
+  const cart = await db.findOne({
+    model: Cart,
+    filter: { user: userId }
+  });
+
+  if (!cart) {
+    return next(new ApiError("Cart not found", 404));
+  }
+
+  // Clear all cart items and set total to 0
+  const updatedCart = await db.update({
+    model: Cart,
+    filter: { _id: cart._id },
+    data: { 
+      cartItems: [],
+      totalCartPrice: 0
+    }
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "Cart cleared successfully",
+    numOfCartItems: 0,
+    data: updatedCart,
+  });
 });
 
-// @desc    Update specific cart item quantity
+// @desc    Update cart item quantity
 // @route   PUT /api/v1/cart/:itemId
-// @access  Public (supports both authenticated users and guests)
+// @access  Private/User
 exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   const { quantity } = req.body;
-  const cartIdentifier = getCartIdentifier(req);
+  const userId = req.user._id;
 
-  const cart = await Cart.findOne(cartIdentifier);
+  const cart = await db.findOne({
+    model: Cart,
+    filter: { user: userId }
+  });
+
   if (!cart) {
     return next(new ApiError("Cart not found", 404));
   }
 
   const itemIndex = cart.cartItems.findIndex(
-    (item) => item._id.toString() === req.params.itemId
+    item => item._id.toString() === req.params.itemId
   );
-  if (itemIndex > -1) {
-    const cartItem = cart.cartItems[itemIndex];
-    cartItem.quantity = quantity;
-    cart.cartItems[itemIndex] = cartItem;
-  } else {
-    return next(
-      new ApiError(`there is no item for this id :${req.params.itemId}`, 404)
-    );
+
+  if (itemIndex === -1) {
+    return next(new ApiError(`No item found with id: ${req.params.itemId}`, 404));
   }
 
-  calcTotalCartPrice(cart);
+  const cartItem = cart.cartItems[itemIndex];
+  
+  // Validate product availability for new quantity
+  await validateProductStock(cartItem.product, quantity, cartItem.color);
 
-  await cart.save();
+  // Update quantity in cart items
+  const updatedCartItems = [...cart.cartItems];
+  updatedCartItems[itemIndex].quantity = parseInt(quantity);
+
+  // Update cart with recalculated total price
+  const updatedCart = await updateCartWithTotalPrice(cart._id, updatedCartItems);
+
+  // Populate before response
+  const populatedCart = await db.populate({
+    model: Cart,
+    query: updatedCart,
+    path: 'cartItems.product',
+    select: 'title imageCover brand'
+  });
 
   res.status(200).json({
     status: "success",
-    numOfCartItems: cart.cartItems.length,
-    data: cart,
+    message: "Quantity updated successfully",
+    numOfCartItems: populatedCart.cartItems.length,
+    data: populatedCart,
   });
 });
 
-// @desc    Apply coupon on user or guest cart
-// @route   PUT /api/v1/cart/applyCoupon
-// @access  Public (supports both authenticated users and guests)
-exports.applyCoupon = asyncHandler(async (req, res, next) => {
-  // 1) Get coupon based on coupon name
-  const coupon = await Coupon.findOne({
-    name: req.body.coupon,
-    expire: { $gt: Date.now() },
+// @desc    Get cart summary (total items and price)
+// @route   GET /api/v1/cart/summary
+// @access  Private/User
+exports.getCartSummary = asyncHandler(async (req, res, next) => {
+  const userId = req.user._id;
+
+  const cart = await db.findOne({
+    model: Cart,
+    filter: { user: userId }
   });
 
-  if (!coupon) {
-    return next(new ApiError(`Coupon is invalid or expired`));
-  }
-
-  // 2) Get user or guest cart to get total cart price
-  const cartIdentifier = getCartIdentifier(req);
-  const cart = await Cart.findOne(cartIdentifier);
-
-  if (!cart) {
-    return next(new ApiError("Cart not found", 404));
-  }
-
-  const totalPrice = cart.totalCartPrice;
-
-  // 3) Calculate price after priceAfterDiscount
-  const totalPriceAfterDiscount = (
-    totalPrice -
-    (totalPrice * coupon.discount) / 100
-  ).toFixed(2); // 99.23
-
-  cart.totalPriceAfterDiscount = totalPriceAfterDiscount;
-  await cart.save();
-
-  res.status(200).json({
-    status: "success",
-    numOfCartItems: cart.cartItems.length,
-    data: cart,
-  });
-});
-
-exports.addProductToUserCart = async (userId, productId, color, price) => {
-  let cart = await Cart.findOne({ user: userId });
-
-  if (!cart) {
-    cart = await Cart.create({
-      user: userId,
-      cartItems: [{ product: productId, color, price, quantity: 1 }],
+  if (!cart || cart.cartItems.length === 0) {
+    return res.status(200).json({
+      status: "success",
+      data: {
+        totalItems: 0,
+        totalPrice: 0,
+        message: "Cart is empty"
+      }
     });
-  } else {
-    const index = cart.cartItems.findIndex(
-      (item) =>
-        item.product.toString() === productId.toString() && item.color === color
-    );
-
-    if (index > -1) {
-      cart.cartItems[index].quantity += 1;
-    } else {
-      cart.cartItems.push({ product: productId, color, price, quantity: 1 });
-    }
   }
 
-  // تحديث السعر الإجمالي (لو بتستخدم)
-  cart.totalCartPrice = cart.cartItems.reduce(
-    (acc, item) => acc + item.price * item.quantity,
-    0
-  );
-  await cart.save();
-  return cart;
-};
+  const summary = {
+    totalItems: cart.cartItems.reduce((total, item) => total + item.quantity, 0),
+    totalPrice: cart.totalCartPrice,
+    numOfCartItems: cart.cartItems.length
+  };
+
+  res.status(200).json({
+    status: "success",
+    data: summary
+  });
+});
