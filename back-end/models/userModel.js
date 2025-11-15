@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { userRole } = require("../enum.js");
 
 const userSchema = new mongoose.Schema(
   {
@@ -29,8 +30,8 @@ const userSchema = new mongoose.Schema(
     passwordResetVerified: Boolean,
     role: {
       type: String,
-      enum: ["user", "manager", "admin"],
-      default: "user",
+      enum: Object.values(userRole),
+      default: userRole.user,
     },
     active: {
       type: Boolean,
@@ -42,6 +43,11 @@ const userSchema = new mongoose.Schema(
         ref: "Product",
       },
     ],
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerifyToken: String,
     addresses: [
       {
         id: { type: mongoose.Schema.Types.ObjectId, ref: "Address" },
