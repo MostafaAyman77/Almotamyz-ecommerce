@@ -1,6 +1,6 @@
 import React from 'react'
 
-const Checkoutage = () => {
+const CheckoutPage = () => {
   return (
     <div>
       checkout Page
@@ -8,4 +8,4 @@ const Checkoutage = () => {
   )
 }
 
-export default Checkoutage
+export default CheckoutPage
