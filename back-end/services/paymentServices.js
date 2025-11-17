@@ -4,7 +4,7 @@ class PaymobService {
   constructor() {
     this.baseURL = 'https://accept.paymob.com/api';
     this.apiKey = process.env.PAYMOB_API_KEY;
-    
+
     // Multiple Integration IDs for different payment methods
     this.integrations = {
       card: {
@@ -49,7 +49,7 @@ class PaymobService {
   async generatePaymentKey(authToken, orderId, amountCents, billingData, paymentMethod = 'card') {
     try {
       const integrationId = this.integrations[paymentMethod].id;
-      
+
       const response = await axios.post(`${this.baseURL}/acceptance/payment_keys`, {
         auth_token: authToken,
         amount_cents: amountCents,
@@ -147,37 +147,48 @@ class PaymobService {
       };
     }
   }
+  verifyTransactionResponse(queryParams) {
+    const crypto = require('crypto');
+    const hmac = crypto.createHmac('sha512', process.env.PAYMOB_HMAC_SECRET);
 
+    // ⚠️ IMPORTANT: The order of fields MUST match Paymob's documentation exactly
+    const data = [
+      queryParams.amount_cents,
+      queryParams.created_at,
+      queryParams.currency,
+      queryParams.error_occured,
+      queryParams.has_parent_transaction,
+      queryParams.id,
+      queryParams.integration_id,
+      queryParams.is_3d_secure,
+      queryParams.is_auth,
+      queryParams.is_capture,
+      queryParams.is_refunded,
+      queryParams.is_standalone_payment,
+      queryParams.is_voided,
+      queryParams.order,
+      queryParams.owner,
+      queryParams.pending,
+      queryParams.source_data_pan,
+      queryParams.source_data_sub_type,
+      queryParams.source_data_type,
+      queryParams.success
+    ].join('');
+    console.log("order data" , queryParams.order)
+    const calculatedHmac = hmac.update(data).digest('hex');
+
+    // Log for debugging (remove in production)
+    console.log('Calculated HMAC:', calculatedHmac);
+    console.log('Received HMAC:', queryParams.hmac);
+
+    return calculatedHmac === queryParams.hmac;
+  }
   // Verify transaction callback
   verifyCallback(callbackData) {
-    const hmac = require('crypto').createHmac('sha512', process.env.PAYMOB_HMAC_SECRET);
-    
-    const data = [
-      callbackData.amount_cents,
-      callbackData.created_at,
-      callbackData.currency,
-      callbackData.error_occured,
-      callbackData.has_parent_transaction,
-      callbackData.id,
-      callbackData.integration_id,
-      callbackData.is_3d_secure,
-      callbackData.is_auth,
-      callbackData.is_capture,
-      callbackData.is_refunded,
-      callbackData.is_standalone_payment,
-      callbackData.is_voided,
-      callbackData.order,
-      callbackData.owner,
-      callbackData.pending,
-      callbackData.source_data_pan,
-      callbackData.source_data_sub_type,
-      callbackData.source_data_type,
-      callbackData.success
-    ].join('');
-
-    const hash = hmac.update(data).digest('hex');
-    return hash === callbackData.hmac;
+    return this.verifyTransactionResponse(callbackData)
   }
+
+
 }
 
 module.exports = PaymobService;

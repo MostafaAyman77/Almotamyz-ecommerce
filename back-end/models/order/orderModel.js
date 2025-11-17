@@ -80,7 +80,25 @@ const orderSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
       default: null
-    }
+    },
+    paymentReference: {
+      type: String, // Paymob order ID
+      unique: true,
+      sparse: true
+    },
+    paymentToken: {
+      type: String, // Paymob payment token
+    },
+    transactionId: {
+      type: String, // Paymob transaction ID
+    },
+    
+    // Enhanced payment tracking
+    paymentAttempts: {
+      type: Number,
+      default: 0
+    },
+    lastPaymentAttempt: Date,
   },
   { timestamps: true }
 );
