@@ -3,7 +3,7 @@ const Cart = require("../../models/cartModel");
 const Coupon = require("../../models/couponModel");
 const PaymobService = require("../paymentServices.js");
 const paymobService = new PaymobService();
-const { 
+const {
   create,
   findOne,
   findById,
@@ -13,6 +13,7 @@ const {
   softDelete,
   aggregate
 } = require("./../DB/db.services.js");
+const Product = require("../../models/productModel.js");
 
 
 
@@ -29,9 +30,9 @@ const compressCartItemsForStorage = (cartItems) => {
 // Compress order response for API (removes unwanted fields from populated products)
 const compressOrderResponse = (order) => {
   if (!order) return order;
-  
+
   const compressedOrder = order.toObject ? order.toObject() : { ...order };
-  
+
   if (compressedOrder.cartItems) {
     compressedOrder.cartItems = compressedOrder.cartItems.map(item => {
       const compressedItem = {
@@ -40,29 +41,29 @@ const compressOrderResponse = (order) => {
         quantity: item.quantity,
         price: item.price,
         color: item.color
-      };    
+      };
       return compressedItem;
     });
   }
-  
+
   return compressedOrder;
 };
 
 // Compress multiple orders for API response
 const compressOrdersResponse = (orders) => {
   if (!orders) return orders;
-  
+
   if (Array.isArray(orders)) {
     return orders.map(order => compressOrderResponse(order));
   }
-  
+
   if (orders.data && Array.isArray(orders.data)) {
     return {
       ...orders,
       data: orders.data.map(order => compressOrderResponse(order))
     };
   }
-  
+
   return compressOrderResponse(orders);
 };
 
@@ -83,7 +84,7 @@ exports.createOrder = async (userId, orderData) => {
   if (cart.cartItems.length === 0) throw new Error("Cart is empty");
 
   const cartId = cart._id;
-  
+
   // Compress cart items before storing
   const compressedCartItems = compressCartItemsForStorage(cart.cartItems);
 
@@ -440,9 +441,9 @@ exports.retryOrderPayment = async (orderId, userId, paymentMethod = 'card', phon
   });
 
   if (!order) throw new Error("Order not found");
-  
+
   if (order.isPaid) throw new Error("Order already paid");
-  
+
   if (order.orderStatus === 'cancelled') throw new Error("Cannot retry payment for cancelled order");
 
   // Prepare billing data
@@ -526,7 +527,7 @@ exports.getOrderByPaymentReference = async (paymentReference) => {
 exports.processPaymobWebhook = async (webhookData) => {
   // Extract the transaction object from the webhook
   const transaction = webhookData.obj || webhookData;
-  
+
   if (!transaction) {
     throw new Error("Invalid webhook data structure");
   }
@@ -556,6 +557,11 @@ exports.processPaymobWebhook = async (webhookData) => {
     filter: { paymentReference: paymobOrderId.toString() }
   });
 
+  const cart = await softDelete({
+    model: Cart,
+    filter: { user: order.user, _id: order.cart }
+  })
+
   if (!order) {
     console.error(`Order not found for Paymob order ID: ${paymobOrderId}`);
     throw new Error("Order not found");
@@ -575,13 +581,13 @@ exports.processPaymobWebhook = async (webhookData) => {
     updateData.isPaid = false;
     updateData.orderStatus = 'cancelled';
     console.log(`Order ${order._id} - Payment refunded`);
-    
+
   } else if (is_voided) {
     // Payment was voided
     updateData.paymentStatus = 'failed';
     updateData.isPaid = false;
     console.log(`Order ${order._id} - Payment voided`);
-    
+
   } else if (success === true || success === 'true') {
     // Check if payment is still pending or completed
     if (pending === false || pending === 'false') {
@@ -597,7 +603,7 @@ exports.processPaymobWebhook = async (webhookData) => {
       updateData.isPaid = false;
       console.log(`Order ${order._id} - Payment pending`);
     }
-    
+
   } else {
     // Payment failed or declined
     updateData.paymentStatus = 'failed';
@@ -619,7 +625,7 @@ exports.processPaymobWebhook = async (webhookData) => {
 };
 
 exports.verifyAndProcessPaymobWebhook = async (callbackData) => {
- return exports.processPaymobWebhook(callbackData);
+  return exports.processPaymobWebhook(callbackData);
 };
 
 // 🎯 EXPORT COMPRESSION FUNCTIONS FOR USE IN OTHER FILES

@@ -148,44 +148,42 @@ class PaymobService {
     }
   }
   verifyTransactionResponse(queryParams) {
-    const crypto = require('crypto');
-    const hmac = crypto.createHmac('sha512', process.env.PAYMOB_HMAC_SECRET);
+  const crypto = require('crypto');
+  
+  // Step 1: Sort keys lexicographically (exclude hmac itself)
+  const sortedKeys = Object.keys(queryParams)
+    .filter(key => key !== 'hmac')
+    .sort();
+  
+  // Step 2: Concatenate values in sorted order
+  const concatenatedString = sortedKeys
+    .map(key => String(queryParams[key] ?? ''))
+    .join('');
+  
+  // Step 3 & 4: Get secret and calculate HMAC
+  const hmacSecret = process.env.PAYMOB_HMAC_SECRET;
+  if (!hmacSecret) return false;
+  
+  const hmac = crypto.createHmac('sha512', hmacSecret);
+  const calculatedHmac = hmac.update(concatenatedString).digest('hex');
+  
+  // Step 5: Compare
+  return calculatedHmac === queryParams.hmac;
+}
 
-    // ⚠️ IMPORTANT: The order of fields MUST match Paymob's documentation exactly
-    const data = [
-      queryParams.amount_cents,
-      queryParams.created_at,
-      queryParams.currency,
-      queryParams.error_occured,
-      queryParams.has_parent_transaction,
-      queryParams.id,
-      queryParams.integration_id,
-      queryParams.is_3d_secure,
-      queryParams.is_auth,
-      queryParams.is_capture,
-      queryParams.is_refunded,
-      queryParams.is_standalone_payment,
-      queryParams.is_voided,
-      queryParams.order,
-      queryParams.owner,
-      queryParams.pending,
-      queryParams.source_data_pan,
-      queryParams.source_data_sub_type,
-      queryParams.source_data_type,
-      queryParams.success
-    ].join('');
-    console.log("order data" , queryParams.order)
-    const calculatedHmac = hmac.update(data).digest('hex');
-
-    // Log for debugging (remove in production)
-    console.log('Calculated HMAC:', calculatedHmac);
-    console.log('Received HMAC:', queryParams.hmac);
-
-    return calculatedHmac === queryParams.hmac;
-  }
-  // Verify transaction callback
+  // Verify transaction callback (wrapper method for backward compatibility)
   verifyCallback(callbackData) {
-    return this.verifyTransactionResponse(callbackData)
+    console.log('='.repeat(60));
+    console.log('PAYMOB HMAC VERIFICATION');
+    console.log('='.repeat(60));
+
+    const result = this.verifyTransactionResponse(callbackData);
+
+    console.log('='.repeat(60));
+    console.log(`RESULT: ${result ? 'VALID ✅' : 'INVALID ❌'}`);
+    console.log('='.repeat(60));
+
+    return result;
   }
 
 
