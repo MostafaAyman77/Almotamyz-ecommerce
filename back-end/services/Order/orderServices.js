@@ -76,7 +76,7 @@ exports.createOrder = async (userId, orderData) => {
   // Get user's cart
   const cart = await findOne({
     model: Cart,
-    filter: { user: userId },
+    filter: { user: userId , isDeleted: false },
     options: { populate: "cartItems.product" }
   });
 
@@ -153,7 +153,7 @@ exports.getUserOrders = async (userId, page = 1, limit = 10) => {
 
 // Get single order
 exports.getOrder = async (orderId, userId = null) => {
-  const filter = { _id: orderId };
+  const filter = { _id: orderId , isDeleted: false };
   if (userId) filter.user = userId;
 
   const order = await findOne({
@@ -214,6 +214,7 @@ exports.updateOrderStatus = async (orderId, status, userId = null) => {
 };
 
 // Update payment status
+// Update payment status
 exports.updatePaymentStatus = async (orderId, paymentStatus) => {
   const updateData = {
     paymentStatus,
@@ -227,6 +228,11 @@ exports.updatePaymentStatus = async (orderId, paymentStatus) => {
     data: updateData,
     options: { populate: "cartItems.product coupon" }
   });
+
+  // If payment is successful, clear cart and reduce product quantities
+  if (paymentStatus === "paid") {
+    await exports.handleSuccessfulPayment(order);
+  }
 
   return compressOrderResponse(order);
 };
@@ -318,7 +324,7 @@ exports.createOrderWithPaymob = async (userId, orderData, paymentMethod = 'card'
   // Get user's cart
   const cart = await findOne({
     model: Cart,
-    filter: { user: userId },
+    filter: { user: userId , isDeleted: false },
     options: { populate: "cartItems.product" }
   });
 
@@ -437,7 +443,7 @@ exports.handlePaymobCallback = async (callbackData) => {
 exports.retryOrderPayment = async (orderId, userId, paymentMethod = 'card', phoneNumber = null) => {
   const order = await findOne({
     model: Order,
-    filter: { _id: orderId, user: userId }
+    filter: { _id: orderId, user: userId  , isDeleted: false },
   });
 
   if (!order) throw new Error("Order not found");
@@ -507,7 +513,7 @@ exports.retryOrderPayment = async (orderId, userId, paymentMethod = 'card', phon
 exports.getOrderByPaymentReference = async (paymentReference) => {
   const order = await findOne({
     model: Order,
-    filter: { paymentReference: paymentReference.toString() },
+    filter: { paymentReference: paymentReference.toString()  , isDeleted: false },
     options: { populate: "cartItems.product coupon user" }
   });
   return order ? compressOrderResponse(order) : null;
@@ -516,7 +522,7 @@ exports.getOrderByPaymentReference = async (paymentReference) => {
 exports.getOrderByPaymentReference = async (paymentReference) => {
   const order = await findOne({
     model: Order,
-    filter: { paymentReference: paymentReference.toString() },
+    filter: { paymentReference: paymentReference.toString() , isDeleted: false },
     options: { populate: "cartItems.product coupon user" }
   });
   return order ? compressOrderResponse(order) : null;
@@ -554,13 +560,9 @@ exports.processPaymobWebhook = async (webhookData) => {
   // Find order by payment reference
   const order = await findOne({
     model: Order,
-    filter: { paymentReference: paymobOrderId.toString() }
+    filter: { paymentReference: paymobOrderId.toString() },
+    options: { populate: "cartItems.product coupon user" }
   });
-
-  const cart = await softDelete({
-    model: Cart,
-    filter: { user: order.user, _id: order.cart }
-  })
 
   if (!order) {
     console.error(`Order not found for Paymob order ID: ${paymobOrderId}`);
@@ -573,6 +575,8 @@ exports.processPaymobWebhook = async (webhookData) => {
     paymentAttempts: order.paymentAttempts + 1,
     lastPaymentAttempt: new Date()
   };
+
+  let isPaymentSuccessful = false;
 
   // Handle different payment states based on webhook data
   if (is_refunded) {
@@ -596,6 +600,7 @@ exports.processPaymobWebhook = async (webhookData) => {
       updateData.isPaid = true;
       updateData.paidAt = new Date();
       updateData.orderStatus = 'processing';
+      isPaymentSuccessful = true;
       console.log(`Order ${order._id} - Payment successful`);
     } else {
       // Payment is pending (e.g., waiting for OTP, kiosk payment generated)
@@ -621,11 +626,62 @@ exports.processPaymobWebhook = async (webhookData) => {
 
   console.log(`Order ${order._id} updated - Status: ${updateData.paymentStatus}, Transaction: ${transactionId}`);
 
+  // If payment is successful, clear cart and reduce product quantities
+  if (isPaymentSuccessful) {
+    await exports.handleSuccessfulPayment(updatedOrder);
+  }
+
   return compressOrderResponse(updatedOrder);
 };
 
 exports.verifyAndProcessPaymobWebhook = async (callbackData) => {
   return exports.processPaymobWebhook(callbackData);
+};
+
+// Handle successful payment - clear cart and reduce product quantities
+exports.handleSuccessfulPayment = async (order) => {
+  try {
+    // Clear the user's cart
+    await softDelete({
+      model: Cart,
+      filter: { user: order.user._id || order.user },
+    });
+
+    // Reduce product quantities for each item in the order
+    if (order.cartItems && order.cartItems.length > 0) {
+      for (const item of order.cartItems) {
+        const productId = item.product._id || item.product;
+        const quantity = item.quantity;
+
+        // Find the product and reduce its quantity
+        const product = await findById({
+          model: Product,
+          id: productId
+        });
+
+        if (product) {
+          const newQuantity = Math.max(0, product.quantity - quantity);
+          
+          await update({
+            model: Product,
+            filter: { _id: productId },
+            data: { 
+              quantity: newQuantity,
+              $inc: { __v: 1 } // Increment version
+            }
+          });
+
+          // console.log(`Reduced quantity for product ${productId} by ${quantity}. New quantity: ${newQuantity}`);
+        }
+      }
+    }
+
+    // console.log(`Successfully processed payment cleanup for order ${order._id}`);
+  } catch (error) {
+    console.error(`Error in handleSuccessfulPayment for order ${order._id}:`, error);
+    // Don't throw the error to avoid disrupting the webhook flow
+    // The payment is already recorded as successful
+  }
 };
 
 // 🎯 EXPORT COMPRESSION FUNCTIONS FOR USE IN OTHER FILES

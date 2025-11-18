@@ -59,7 +59,7 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
   // Find or create user cart (ensures one cart per user)
   let cart = await db.findOne({
     model: Cart,
-    filter: { user: userId }
+    filter: { user: userId , isDeleted: false }
   });
 
   if (!cart) {
@@ -135,7 +135,7 @@ exports.getUserCart = asyncHandler(async (req, res, next) => {
 
   const cart = await db.findOne({
     model: Cart,
-    filter: { user: userId }
+    filter: { user: userId , isDeleted: false }
   });
 
   if (!cart) {
@@ -170,7 +170,7 @@ exports.removeCartItem = asyncHandler(async (req, res, next) => {
 
   const cart = await db.findOne({
     model: Cart,
-    filter: { user: userId }
+    filter: { user: userId , isDeleted: false }
   });
 
   if (!cart) {
@@ -217,7 +217,7 @@ exports.clearCart = asyncHandler(async (req, res, next) => {
 
   const cart = await db.findOne({
     model: Cart,
-    filter: { user: userId }
+    filter: { user: userId , isDeleted: false }
   });
 
   if (!cart) {
@@ -225,13 +225,9 @@ exports.clearCart = asyncHandler(async (req, res, next) => {
   }
 
   // Clear all cart items and set total to 0
-  const updatedCart = await db.update({
+  const updatedCart = await db.softDelete({
     model: Cart,
-    filter: { _id: cart._id },
-    data: { 
-      cartItems: [],
-      totalCartPrice: 0
-    }
+    filter: { _id: cart._id }
   });
 
   res.status(200).json({
@@ -251,7 +247,7 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
 
   const cart = await db.findOne({
     model: Cart,
-    filter: { user: userId }
+    filter: { user: userId , isDeleted: false }
   });
 
   if (!cart) {
@@ -302,7 +298,7 @@ exports.getCartSummary = asyncHandler(async (req, res, next) => {
 
   const cart = await db.findOne({
     model: Cart,
-    filter: { user: userId }
+    filter: { user: userId , isDeleted: false }
   });
 
   if (!cart || cart.cartItems.length === 0) {

@@ -32,7 +32,6 @@ const cartSchema = new mongoose.Schema(
       type: mongoose.Schema.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
     },
     isDeleted: {
         type: Boolean,
