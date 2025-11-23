@@ -150,24 +150,34 @@ class PaymobService {
   verifyTransactionResponse(queryParams) {
   const crypto = require('crypto');
   
-  // Step 1: Sort keys lexicographically (exclude hmac itself)
-  const sortedKeys = Object.keys(queryParams)
-    .filter(key => key !== 'hmac')
-    .sort();
+  // List of keys to exclude from HMAC calculation
+  const excludedKeys = [
+    'profile_id', 'merchant_commission', 'accept_fees', 'discount_details',
+    'is_void', 'is_refund', 'refunded_amount_cents', 'captured_amount',
+    'updated_at', 'is_settled', 'bill_balanced', 'is_bill',
+    'data.message', 'acq_response_code', 'txn_response_code', 'hmac'
+  ];
   
-  // Step 2: Concatenate values in sorted order
+  // Step 1: Filter out excluded keys and hmac
+  const validKeys = Object.keys(queryParams)
+    .filter(key => !excludedKeys.includes(key) && key !== 'hmac');
+  
+  // Step 2: Sort keys lexicographically
+  const sortedKeys = validKeys.sort();
+  
+  // Step 3: Concatenate values in sorted order
   const concatenatedString = sortedKeys
     .map(key => String(queryParams[key] ?? ''))
     .join('');
   
-  // Step 3 & 4: Get secret and calculate HMAC
+  // Step 4 & 5: Get secret and calculate HMAC
   const hmacSecret = process.env.PAYMOB_HMAC_SECRET;
   if (!hmacSecret) return false;
   
   const hmac = crypto.createHmac('sha512', hmacSecret);
   const calculatedHmac = hmac.update(concatenatedString).digest('hex');
   
-  // Step 5: Compare
+  // Step 6: Compare
   return calculatedHmac === queryParams.hmac;
 }
 
