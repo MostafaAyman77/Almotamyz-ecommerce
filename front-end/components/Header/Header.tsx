@@ -3,11 +3,12 @@ import Link from 'next/link'
 import React from 'react'
 import SearchBar from '../SearchBar'
 import { Bell, Home, ShoppingCart } from 'lucide-react'
+import Styles from "./styles.module.css";
 
 const Header = () => {
   return (
     <>
-        <nav className="w-full flex items-center justify-between border-b-2 border-gray-200 pb-4">
+        <nav className={`${Styles["header"]}`}>
           {/* RIGHT */}
           <Link className='flex items-center' href="/">المتميز للمعدات</Link>
           {/* <Link href="/" className="flex items-center"> 
@@ -15,7 +16,7 @@ const Header = () => {
           </Link> */}
 
           {/* LEFT */}
-          <div className='flex items-center gap-6'>
+          <div className=' flex items-center justify-content-end gap-6'>
             <SearchBar />
             <Link href="/">
               <Home className='w-4 h-4 text-gray-600'/>
@@ -26,9 +27,11 @@ const Header = () => {
             <Link href="cart">
               <ShoppingCart className='w-4 h-4 text-gray-600' />
             </Link>
-            <Link href="/login">تسجيل الدخول</Link>
+            <Link href="/login">
+              <button className={`btn`}>تسجيل الدخول</button>
+            </Link>
           </div>
-          <div className="flex item-center space-x-4"></div>
+          
         </nav>
     </>
   )

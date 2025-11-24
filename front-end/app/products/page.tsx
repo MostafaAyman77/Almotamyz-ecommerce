@@ -1,11 +1,9 @@
 import React from 'react'
 
-const ProductsPage = () => {
+export default async function ProductsPage() {
   return (
     <div>
       Products Page
     </div>
   )
 }
-
-export default ProductsPage
