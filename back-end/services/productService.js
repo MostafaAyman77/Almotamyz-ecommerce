@@ -4,6 +4,12 @@ const sharp = require("sharp");
 const slugify = require("slugify");
 
 const { uploadMixOfImages } = require("../middlewares/uploadImageMiddleware");
+const { 
+  uploadToCloudinary, 
+  deleteFromCloudinary,
+  deleteFolderFromCloudinary,
+  extractPublicId 
+} = require("../config/cloudinaryConfig");
 const db = require("../services/DB/db.services");
 const Product = require("../models/productModel");
 const SubCategoryModel = require("../models/subCategoryModel.js");
@@ -20,39 +26,144 @@ exports.uploadProductImages = uploadMixOfImages([
 ]);
 
 exports.resizeProductImages = asyncHandler(async (req, res, next) => {
-  //1- Image processing for imageCover
-  if (req.files.imageCover) {
-    const imageCoverFileName = `product-${uuidv4()}-${Date.now()}-cover.jpeg`;
+  // Get product ID from params or create temporary ID for new products
+  const productId = req.params.id || 'temp-' + uuidv4();
+  const cloudinaryFolder = `products/${productId}`;
 
-    await sharp(req.files.imageCover[0].buffer)
-      .resize(2000, 1333)
-      .toFormat("jpeg")
-      .jpeg({ quality: 95 })
-      .toFile(`uploads/products/${imageCoverFileName}`);
+  try {
+    //1- Image processing and upload for imageCover
+    if (req.files && req.files.imageCover) {
+      // Resize image using Sharp
+      const processedBuffer = await sharp(req.files.imageCover[0].buffer)
+        .resize(2000, 1333, { 
+          fit: 'inside',
+          withoutEnlargement: true 
+        })
+        .toFormat("jpeg")
+        .jpeg({ quality: 95 })
+        .toBuffer();
 
-    // Save image into our db
-    req.body.imageCover = imageCoverFileName;
+      // Upload to Cloudinary
+      const result = await uploadToCloudinary(
+        processedBuffer,
+        cloudinaryFolder,
+        `cover-${Date.now()}`
+      );
+
+      // Save Cloudinary URL and public_id to request body
+      req.body.imageCover = result.secure_url;
+      req.body.imageCoverPublicId = result.public_id;
+    }
+
+    //2- Image processing and upload for images array
+    if (req.files && req.files.images) {
+      req.body.images = [];
+      req.body.imagesPublicIds = [];
+
+      await Promise.all(
+        req.files.images.map(async (img, index) => {
+          // Resize image using Sharp
+          const processedBuffer = await sharp(img.buffer)
+            .resize(2000, 1333, { 
+              fit: 'inside',
+              withoutEnlargement: true 
+            })
+            .toFormat("jpeg")
+            .jpeg({ quality: 95 })
+            .toBuffer();
+
+          // Upload to Cloudinary
+          const result = await uploadToCloudinary(
+            processedBuffer,
+            cloudinaryFolder,
+            `image-${index + 1}-${Date.now()}`
+          );
+
+          // Save Cloudinary URL and public_id
+          req.body.images.push(result.secure_url);
+          req.body.imagesPublicIds.push(result.public_id);
+        })
+      );
+    }
+
+    // Store temporary product ID for create operation
+    if (!req.params.id) {
+      req.body.tempProductId = productId;
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error processing images:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Error uploading images to Cloudinary",
+      error: error.message
+    });
   }
-  //2- Image processing for images
-  if (req.files.images) {
-    req.body.images = [];
-    await Promise.all(
-      req.files.images.map(async (img, index) => {
-        const imageName = `product-${uuidv4()}-${Date.now()}-${index + 1}.jpeg`;
-
-        await sharp(img.buffer)
-          .resize(2000, 1333)
-          .toFormat("jpeg")
-          .jpeg({ quality: 95 })
-          .toFile(`uploads/products/${imageName}`);
-
-        // Save image into our db
-        req.body.images.push(imageName);
-      })
-    );
-  }
-  next();
 });
+
+// Helper function to rename Cloudinary folder
+const renameCloudinaryFolder = async (oldFolder, newFolder, product) => {
+  try {
+    const updates = {
+      imageCover: product.imageCover,
+      imageCoverPublicId: product.imageCoverPublicId,
+      images: product.images || [],
+      imagesPublicIds: product.imagesPublicIds || []
+    };
+
+    // Rename cover image if exists
+    if (product.imageCoverPublicId) {
+      const oldPublicId = product.imageCoverPublicId;
+      const newPublicId = oldPublicId.replace(oldFolder, newFolder);
+      
+      // Copy to new location
+      const result = await uploadToCloudinary(
+        await fetch(product.imageCover).then(r => r.buffer()),
+        newFolder,
+        newPublicId.split('/').pop().replace(/\.\w+$/, '')
+      );
+      
+      updates.imageCover = result.secure_url;
+      updates.imageCoverPublicId = result.public_id;
+      
+      // Delete old image
+      await deleteFromCloudinary(oldPublicId);
+    }
+
+    // Rename additional images if exist
+    if (product.imagesPublicIds && product.imagesPublicIds.length > 0) {
+      const newImages = [];
+      const newPublicIds = [];
+
+      for (let i = 0; i < product.imagesPublicIds.length; i++) {
+        const oldPublicId = product.imagesPublicIds[i];
+        const newPublicId = oldPublicId.replace(oldFolder, newFolder);
+        
+        // Copy to new location
+        const result = await uploadToCloudinary(
+          await fetch(product.images[i]).then(r => r.buffer()),
+          newFolder,
+          newPublicId.split('/').pop().replace(/\.\w+$/, '')
+        );
+        
+        newImages.push(result.secure_url);
+        newPublicIds.push(result.public_id);
+        
+        // Delete old image
+        await deleteFromCloudinary(oldPublicId);
+      }
+
+      updates.images = newImages;
+      updates.imagesPublicIds = newPublicIds;
+    }
+
+    return updates;
+  } catch (error) {
+    console.error("Error renaming Cloudinary folder:", error);
+    return null;
+  }
+};
 
 // @desc    Get list of products
 // @route   GET /api/v1/products?page=1&limit=5
@@ -203,10 +314,33 @@ exports.createProduct = asyncHandler(async (req, res) => {
     productData.slug = slugify(productData.title, { lower: true });
   }
 
+  const tempProductId = productData.tempProductId;
+  delete productData.tempProductId;
+
   const product = await db.create({
     model: Product,
     data: productData
   });
+
+  // Rename Cloudinary folder from temp ID to actual product ID if images were uploaded
+  if (tempProductId && tempProductId.startsWith('temp-')) {
+    const oldFolder = `products/${tempProductId}`;
+    const newFolder = `products/${product._id.toString()}`;
+    
+    const updates = await renameCloudinaryFolder(oldFolder, newFolder, product);
+    
+    if (updates) {
+      // Update product with new image URLs and public_ids
+      await db.findByIdAndUpdate({
+        model: Product,
+        id: product._id,
+        data: updates
+      });
+
+      // Update the product object to return
+      Object.assign(product, updates);
+    }
+  }
 
   res.status(201).json({
     status: "success",
@@ -218,18 +352,35 @@ exports.createProduct = asyncHandler(async (req, res) => {
 // @route   PUT /api/v1/products/:id
 // @access  Private 
 exports.updateProduct = asyncHandler(async (req, res) => {
-  const product = await db.findByIdAndUpdate({
+  // Get existing product to handle old images
+  const existingProduct = await db.findById({
     model: Product,
-    id: req.params.id,
-    data: req.body
+    id: req.params.id
   });
 
-  if (!product) {
+  if (!existingProduct) {
     return res.status(404).json({
       status: "fail",
       message: "Product not found",
     });
   }
+
+  // Delete old images from Cloudinary if new ones are uploaded
+  if (req.body.imageCover && existingProduct.imageCoverPublicId) {
+    await deleteFromCloudinary(existingProduct.imageCoverPublicId);
+  }
+
+  if (req.body.images && existingProduct.imagesPublicIds && existingProduct.imagesPublicIds.length > 0) {
+    for (const publicId of existingProduct.imagesPublicIds) {
+      await deleteFromCloudinary(publicId);
+    }
+  }
+
+  const product = await db.findByIdAndUpdate({
+    model: Product,
+    id: req.params.id,
+    data: req.body
+  });
 
   res.status(200).json({
     status: "success",
@@ -252,6 +403,10 @@ exports.deleteProduct = asyncHandler(async (req, res) => {
       message: "Product not found",
     });
   }
+
+  // Optionally delete product images from Cloudinary (commented out to keep images)
+  // const cloudinaryFolder = `products/${req.params.id}`;
+  // await deleteFolderFromCloudinary(cloudinaryFolder);
 
   res.status(204).json({
     status: "success",
@@ -344,5 +499,3 @@ exports.getDeletedProducts = asyncHandler(async (req, res) => {
     data: result.data,
   });
 });
-
-

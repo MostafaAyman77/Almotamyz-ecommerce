@@ -32,12 +32,12 @@ router.use("/:productId/reviews", reviewRoute);
 
 router
   .route("/")
-  .get(getProductsValidator,getProducts)
+  .get(getProductsValidator, getProducts)
   .post(
     authService.protect,
     authService.allowedTo(userRole.admin),
-    // uploadProductImages,
-    // resizeProductImages,
+    uploadProductImages,
+    resizeProductImages,
     createProductValidator,
     createProduct
   );
@@ -55,8 +55,8 @@ router
   .put(
     authService.protect,
     authService.allowedTo(userRole.admin),
-    // uploadProductImages,
-    // resizeProductImages,
+    uploadProductImages,
+    resizeProductImages,
     updateProductValidator,
     updateProduct
   )
