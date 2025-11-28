@@ -44,14 +44,13 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
         `cover-${Date.now()}`
       );
 
+      // Store only the secure URL (no public_id)
       req.body.imageCover = result.secure_url;
-      req.body.imageCoverPublicId = result.public_id;
     }
 
     //2- Image processing for images
     if (req.files.images) {
       req.body.images = [];
-      req.body.imagesPublicIds = [];
       
       await Promise.all(
         req.files.images.map(async (img, index) => {
@@ -68,15 +67,10 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
             `image-${index + 1}-${Date.now()}`
           );
 
+          // Store only the secure URL (no public_id)
           req.body.images.push(result.secure_url);
-          req.body.imagesPublicIds.push(result.public_id);
         })
       );
-    }
-
-    // Store temporary product ID for create operation
-    if (!req.params.id) {
-      req.body.tempProductId = productId;
     }
 
     next();
@@ -90,70 +84,7 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
   }
 });
 
-// Helper function to rename Cloudinary folder when product is created
-const renameCloudinaryFolder = async (oldFolder, newFolder, product) => {
-  try {
-    const updates = {
-      imageCover: product.imageCover,
-      imageCoverPublicId: product.imageCoverPublicId,
-      images: product.images || [],
-      imagesPublicIds: product.imagesPublicIds || []
-    };
-
-    // Rename cover image if exists
-    if (product.imageCoverPublicId) {
-      const oldPublicId = product.imageCoverPublicId;
-      const newPublicId = oldPublicId.replace(oldFolder, newFolder);
-      
-      // Copy to new location
-      const result = await uploadToCloudinary(
-        await fetch(product.imageCover).then(r => r.buffer()),
-        newFolder,
-        newPublicId.split('/').pop().replace(/\.\w+$/, '')
-      );
-      
-      updates.imageCover = result.secure_url;
-      updates.imageCoverPublicId = result.public_id;
-      
-      // Delete old image
-      await deleteFromCloudinary(oldPublicId);
-    }
-
-    // Rename additional images if exist
-    if (product.imagesPublicIds && product.imagesPublicIds.length > 0) {
-      const newImages = [];
-      const newPublicIds = [];
-
-      for (let i = 0; i < product.imagesPublicIds.length; i++) {
-        const oldPublicId = product.imagesPublicIds[i];
-        const newPublicId = oldPublicId.replace(oldFolder, newFolder);
-        
-        // Copy to new location
-        const result = await uploadToCloudinary(
-          await fetch(product.images[i]).then(r => r.buffer()),
-          newFolder,
-          newPublicId.split('/').pop().replace(/\.\w+$/, '')
-        );
-        
-        newImages.push(result.secure_url);
-        newPublicIds.push(result.public_id);
-        
-        // Delete old image
-        await deleteFromCloudinary(oldPublicId);
-      }
-
-      updates.images = newImages;
-      updates.imagesPublicIds = newPublicIds;
-    }
-
-    return updates;
-  } catch (error) {
-    console.error("Error renaming Cloudinary folder:", error);
-    return null;
-  }
-};
-
-// @desc    Add images to product (Cloudinary version)
+// @desc    Add images to product
 // @route   PATCH /api/v1/products/:id/images
 // @access  Private
 exports.addProductImages = asyncHandler(async (req, res) => {
@@ -178,8 +109,7 @@ exports.addProductImages = asyncHandler(async (req, res) => {
 
   // Initialize update data with existing values
   const updateData = {
-    images: product.images || [],
-    imagesPublicIds: product.imagesPublicIds || []
+    images: product.images || []
   };
   
   // Handle new images
@@ -187,7 +117,6 @@ exports.addProductImages = asyncHandler(async (req, res) => {
     console.log(`Processing ${req.files.images.length} new images...`);
     
     const newImages = [];
-    const newImagesPublicIds = [];
     
     // Process images sequentially
     for (let i = 0; i < req.files.images.length; i++) {
@@ -207,14 +136,11 @@ exports.addProductImages = asyncHandler(async (req, res) => {
       );
 
       newImages.push(result.secure_url);
-      newImagesPublicIds.push(result.public_id);
-      
       console.log(`New image ${i + 1} uploaded:`, result.secure_url);
     }
 
     // Combine existing images with new ones
     updateData.images = [...updateData.images, ...newImages];
-    updateData.imagesPublicIds = [...updateData.imagesPublicIds, ...newImagesPublicIds];
   }
 
   // Handle new cover image
@@ -235,8 +161,6 @@ exports.addProductImages = asyncHandler(async (req, res) => {
     );
 
     updateData.imageCover = result.secure_url;
-    updateData.imageCoverPublicId = result.public_id;
-    
     console.log('New cover image uploaded:', result.secure_url);
   }
 
@@ -262,7 +186,7 @@ exports.addProductImages = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Delete product images (Cloudinary version)
+// @desc    Delete product images
 // @route   DELETE /api/v1/products/:id/images
 // @access  Private
 exports.deleteProductImages = asyncHandler(async (req, res) => {
@@ -289,45 +213,35 @@ exports.deleteProductImages = asyncHandler(async (req, res) => {
   const updateData = {};
 
   // Delete cover image if requested
-  if (deleteCover && product.imageCoverPublicId) {
-    console.log('Deleting cover image:', product.imageCoverPublicId);
-    await deleteFromCloudinary(product.imageCoverPublicId);
+  if (deleteCover && product.imageCover) {
+    console.log('Deleting cover image');
+    // Extract public_id from URL and delete from Cloudinary
+    const publicId = extractPublicId(product.imageCover);
+    if (publicId) {
+      await deleteFromCloudinary(publicId);
+    }
     updateData.imageCover = null;
-    updateData.imageCoverPublicId = null;
   }
 
   // Delete specific images
   if (imageUrls && imageUrls.length > 0) {
-    const publicIdsToDelete = [];
     const remainingImages = [];
-    const remainingPublicIds = [];
 
-    // Find public IDs for the images to delete
-    product.images.forEach((imageUrl, index) => {
+    // Filter out images to delete and remove them from Cloudinary
+    for (const imageUrl of product.images) {
       if (imageUrls.includes(imageUrl)) {
-        const publicId = product.imagesPublicIds?.[index] || extractPublicId(imageUrl);
+        // Extract public_id from URL and delete from Cloudinary
+        const publicId = extractPublicId(imageUrl);
         if (publicId) {
-          publicIdsToDelete.push(publicId);
-          console.log('Marking image for deletion:', publicId);
+          console.log('Deleting image from Cloudinary:', publicId);
+          await deleteFromCloudinary(publicId);
         }
       } else {
         remainingImages.push(imageUrl);
-        if (product.imagesPublicIds?.[index]) {
-          remainingPublicIds.push(product.imagesPublicIds[index]);
-        }
       }
-    });
-
-    // Delete from Cloudinary
-    if (publicIdsToDelete.length > 0) {
-      console.log('Deleting images from Cloudinary:', publicIdsToDelete);
-      await Promise.all(
-        publicIdsToDelete.map(publicId => deleteFromCloudinary(publicId))
-      );
     }
 
     updateData.images = remainingImages;
-    updateData.imagesPublicIds = remainingPublicIds;
   }
 
   console.log('Final update data:', updateData);
@@ -360,7 +274,7 @@ exports.getProductImages = asyncHandler(async (req, res) => {
   const product = await db.findNonDeleted({
     model: Product,
     filter: { _id: req.params.id },
-    select: 'imageCover images imagesPublicIds imageCoverPublicId title'
+    select: 'imageCover images title'
   });
 
   if (!product) {
@@ -374,9 +288,7 @@ exports.getProductImages = asyncHandler(async (req, res) => {
     status: "success",
     data: {
       imageCover: product.imageCover,
-      imageCoverPublicId: product.imageCoverPublicId,
       images: product.images || [],
-      imagesPublicIds: product.imagesPublicIds || [],
       productTitle: product.title
     },
   });
