@@ -83,7 +83,7 @@ router.get('/:id/images', getProductImages);
 router.patch(
   '/:id/images',
   authService.protect,
-  authService.allowedTo('admin', 'manager'),
+  authService.allowedTo(userRole.admin),
   uploadProductImages,
   resizeProductImages,
   addProductImages
@@ -92,7 +92,7 @@ router.patch(
 router.delete(
   '/:id/images',
   authService.protect,
-  authService.allowedTo('admin', 'manager'),
+  authService.allowedTo(userRole.admin),
   deleteProductImages
 );
 
