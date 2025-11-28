@@ -11,7 +11,10 @@ const {
   restoreProduct,
   getDeletedProducts,
   uploadProductImages,
-  resizeProductImages
+  resizeProductImages,
+  addProductImages,
+  deleteProductImages,
+  getProductImages
 } = require("../services/productService");
 const {
   getProductValidator,
@@ -72,6 +75,25 @@ router.patch("/:id/restore",
   authService.allowedTo(userRole.admin),
   restoreProductValidator,
   restoreProduct
+);
+
+// Product images routes
+router.get('/:id/images', getProductImages);
+
+router.patch(
+  '/:id/images',
+  authService.protect,
+  authService.allowedTo('admin', 'manager'),
+  uploadProductImages,
+  resizeProductImages,
+  addProductImages
+);
+
+router.delete(
+  '/:id/images',
+  authService.protect,
+  authService.allowedTo('admin', 'manager'),
+  deleteProductImages
 );
 
 router.get("/subcategory/:subCategoryId", getProductsBySubCategory);
