@@ -15,7 +15,6 @@ const {
     addProductToWishlistValidator,
     removeProductFromWishlistValidator,
     checkProductInWishlistValidator,
-    moveProductToCartValidator,
 } = require('../utils/validators/wishlistValidator');
 const { userRole } = require('../enum.js');
 
