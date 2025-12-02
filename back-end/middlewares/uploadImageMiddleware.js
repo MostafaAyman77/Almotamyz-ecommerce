@@ -1,24 +1,37 @@
-const multer = require('multer');
-const ApiError = require('../utils/apiError');
+const multer = require("multer");
 
-const multerOptions = () => {
+// Multer memory storage for processing with Sharp and uploading to Cloudinary
+const multerMemoryStorage = multer.memoryStorage();
 
-    const multerStorage = multer.memoryStorage();
-
-    const multerFilter = function (req, file, cb) {
-        if (file.mimetype.startsWith('image')) {
-        cb(null, true);
-        } else {
-            cb(new ApiError('Only Images allowed', 400), false);
-        }
-    };
-
-    const upload = multer({ storage: multerStorage, fileFilter: multerFilter });
-
-    return upload;
+// File filter to accept only images
+const imageFileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only image files are allowed!"), false);
+  }
 };
 
-exports.uploadSingleImage = (fieldName) => multerOptions().single(fieldName);
+// Upload single image
+exports.uploadSingleImage = (fieldName) =>
+  multer({
+    storage: multerMemoryStorage,
+    fileFilter: imageFileFilter,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  }).single(fieldName);
 
+// Upload mix of images (for products: imageCover + images array)
 exports.uploadMixOfImages = (arrayOfFields) =>
-    multerOptions().fields(arrayOfFields);
+  multer({
+    storage: multerMemoryStorage,
+    fileFilter: imageFileFilter,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  }).fields(arrayOfFields);
+
+// Upload array of images
+exports.uploadArrayOfImages = (fieldName, maxCount) =>
+  multer({
+    storage: multerMemoryStorage,
+    fileFilter: imageFileFilter,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  }).array(fieldName, maxCount);

@@ -15,12 +15,12 @@ const {
     addProductToWishlistValidator,
     removeProductFromWishlistValidator,
     checkProductInWishlistValidator,
-    moveProductToCartValidator,
 } = require('../utils/validators/wishlistValidator');
+const { userRole } = require('../enum.js');
 
 const router = express.Router();
 
-router.use(authService.protect, authService.allowedTo('user'));
+router.use(authService.protect, authService.allowedTo(userRole.user));
 
 router
     .route('/')
@@ -32,12 +32,6 @@ router.get(
     '/check/:productId',
     checkProductInWishlistValidator,
     checkProductInWishlist
-);
-
-router.post(
-    '/:productId/moveToCart',
-    moveProductToCartValidator,
-    moveProductToCart
 );
 
 router.delete(
