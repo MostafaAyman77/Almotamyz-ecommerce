@@ -2,6 +2,7 @@ import Image from "next/image";
 import HeroImage from "@/../public/assets/images/photo.png";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import Wadfow from "@/../public/assets/images/wadfowLogo.png"
 
 const Hero = () => {
   return (
@@ -39,7 +40,7 @@ const Hero = () => {
       </div>
       <div>
         {/* Image */}
-        <Image src={HeroImage} className="" alt="hero" width={500} height={500} />
+        <Image src={Wadfow} className="" alt="hero" width={500} height={500} />
       </div>
     </div>
   );

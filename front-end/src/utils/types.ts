@@ -1,8 +1,8 @@
-type TPost = {
-  userId: number,
-  id: number,
-  title: string,
-  body: string,
-}
+import { StaticImageData } from "next/image";
 
-export type { TPost }
+export type BrandType = {
+  id: number,
+  name: string,
+  slug: string,
+image: StaticImageData | string;
+}

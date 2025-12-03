@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer/Footer";
 import { ToastContainer } from "react-toastify";
 import React from "react";
+import { Providers } from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,7 +41,9 @@ export default function RootLayout({ children }: IRootLayoutProps) {
       >
         <Header />
         <ToastContainer position="top-center" theme="colored" />
-        <main className="mt-20 container mx-auto px-4 py-4">{children}</main>
+        <main className="mt-20 container mx-auto px-4 py-4">
+          <Providers>{children}</Providers>
+        </main>
         <Footer />
       </body>
     </html>
