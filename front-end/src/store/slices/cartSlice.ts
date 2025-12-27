@@ -1,6 +1,7 @@
 "use client";
 
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { RootState } from "../store";
 
 interface Product {
   id: number;
@@ -31,13 +32,24 @@ const cartSlice = createSlice({
   initialState,
   reducers: {
     addToCart(state, action: PayloadAction<Product>) {
-      state.cartItems.push({ ...action.payload, quantity: 1 });
-      localStorage.setItem("cartItems", JSON.stringify(state.cartItems));
+      
+      const exist = state.cartItems.find(
+        (item) => item.id === action.payload.id
+      );
+
+      if(!exist){
+        state.cartItems.push({ ...action.payload, quantity: 1 });
+        localStorage.setItem("cartItems", JSON.stringify(state.cartItems));
+      }
     },
 
     removeFromCart(state, action: PayloadAction<number>) {
       state.cartItems = state.cartItems.filter((i) => i.id !== action.payload);
       localStorage.setItem("cartItems", JSON.stringify(state.cartItems));
+    },
+    clearCart(state) {
+      state.cartItems = [];
+      localStorage.removeItem("cartItems");
     },
 
     increaseQuantity(state, action: PayloadAction<number>) {
@@ -79,6 +91,12 @@ const cartSlice = createSlice({
     },
   },
 });
+export const cartTotalPrice = (state: RootState) =>
+  state.cart.cartItems.reduce(
+    (acc, item) => acc + item.price * item.quantity!,
+    0
+  );
+
 
 export const {
   addToCart,
@@ -87,6 +105,7 @@ export const {
   decreaseQuantity,
   addToFavorite,
   removeFromFavorites,
+  clearCart,
 } = cartSlice.actions;
 
 export default cartSlice.reducer;
