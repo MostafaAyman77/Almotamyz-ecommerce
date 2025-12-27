@@ -1,0 +1,27 @@
+.top-slide {
+  position: relative;
+  margin-bottom: 20px;
+  border-bottom: 1 solid var(--bg-color);
+  padding: 15px 20px 20px 0;
+}
+.top-slide::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  width: 100px;
+  height: 2px;
+  background-color: var(--primary-color);
+}
+.top-slide h2 {
+  font-size: 30px;
+  color: var(--primary-color);
+  margin-bottom: 10px;
+  text-transform: capitalize;
+}
+.products {
+    display: flex;
+    align-items: center;
+    gap: 20;
+    flex-wrap: wrap;
+    padding: 50px 0;
+}

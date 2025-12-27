@@ -19,3 +19,35 @@
 body {
   font-family: var(--font-cairo);
 }
+
+/* Toast */
+
+.toast-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 300px;
+  max-width: 300px;
+}
+.toast-wrapper .toast-image {
+  width: auto;
+  height: 50px;
+  object-fit: cover;
+}
+.toast-wrapper strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+.toast-wrapper .toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+}
+.toast-wrapper .toast-content .btn {
+  margin-top: 5px;
+  font-size: 13px;
+}
