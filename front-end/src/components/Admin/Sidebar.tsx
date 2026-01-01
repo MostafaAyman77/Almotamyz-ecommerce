@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FaBox, FaTags, FaChartLine, FaSignOutAlt } from "react-icons/fa";
+import { FaBox, FaTags, FaChartLine, FaSignOutAlt, FaList, FaStream } from "react-icons/fa";
 import { useDispatch } from "react-redux";
 import { logout } from "@/store/slices/authSlice";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,8 @@ const Sidebar = () => {
         { name: "لوحة التحكم", href: "/admin", icon: <FaChartLine /> },
         { name: "إدارة المنتجات", href: "/admin/products", icon: <FaBox /> },
         { name: "إدارة الماركات", href: "/admin/brands", icon: <FaTags /> },
+        { name: "إدارة التصنيفات", href: "/admin/categories", icon: <FaList /> },
+        { name: "إدارة التصنيفات الفرعية", href: "/admin/subcategories", icon: <FaStream /> },
     ];
 
     const handleLogout = () => {

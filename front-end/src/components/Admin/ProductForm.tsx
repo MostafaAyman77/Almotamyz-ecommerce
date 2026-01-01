@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import { fetchBrands } from "@/store/slices/brandSlice";
-import { fetchCategories, fetchSubCategories } from "@/store/slices/categorySlice";
+import { fetchCategories } from "@/store/slices/categorySlice";
+import { fetchSubCategories } from "@/store/slices/subcategorySlice";
 import { AppDispatch, RootState } from "@/store/store";
 import toast from "react-hot-toast";
 import { FaPlus, FaTimes } from "react-icons/fa";
@@ -20,7 +21,8 @@ export default function ProductForm({ initialData, onSubmit, isEdit = false }: P
     const router = useRouter();
 
     const { brands } = useSelector((state: RootState) => state.brand);
-    const { categories, subcategories } = useSelector((state: RootState) => state.category);
+    const { categories } = useSelector((state: RootState) => state.category);
+    const { subcategories } = useSelector((state: RootState) => state.subcategory);
     const { loading } = useSelector((state: RootState) => state.product);
 
     const [formData, setFormData] = useState({

@@ -2,21 +2,21 @@ import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8000";
 
-interface Category {
+export interface SubCategory {
     _id: string;
     name: string;
     slug?: string;
-    image?: string;
+    category: string | { _id: string; name: string; slug?: string }; // Can be ID or populated object
 }
 
-interface CategoryState {
-    categories: Category[];
+interface SubCategoryState {
+    subcategories: SubCategory[];
     loading: boolean;
     error: string | null;
 }
 
-const initialState: CategoryState = {
-    categories: [],
+const initialState: SubCategoryState = {
+    subcategories: [],
     loading: false,
     error: null,
 };
@@ -29,11 +29,15 @@ const getAuthHeader = (getState: any) => {
     return `${role} ${token}`;
 };
 
-export const fetchCategories = createAsyncThunk(
-    "category/fetchCategories",
-    async (_, { rejectWithValue }) => {
+export const fetchSubCategories = createAsyncThunk(
+    "subcategory/fetchSubCategories",
+    async (categoryId: string | null = null, { rejectWithValue }) => {
         try {
-            const response = await fetch(`${BASE_URL}/api/v1/categories`);
+            const url = categoryId
+                ? `${BASE_URL}/api/v1/categories/${categoryId}/subcategories`
+                : `${BASE_URL}/api/v1/subcategories`;
+
+            const response = await fetch(url);
             const data = await response.json();
             if (!response.ok) throw new Error(data.message);
             return data.data;
@@ -43,23 +47,25 @@ export const fetchCategories = createAsyncThunk(
     }
 );
 
-export const createCategory = createAsyncThunk(
-    "category/createCategory",
-    async (categoryData: any, { rejectWithValue, getState }) => {
+export const createSubCategory = createAsyncThunk(
+    "subcategory/createSubCategory",
+    async (subCategoryData: any, { rejectWithValue, getState }) => {
         try {
             const authHeader = getAuthHeader(getState);
-            const response = await fetch(`${BASE_URL}/api/v1/categories`, {
+            // Typically POST to /api/v1/subcategories or /api/v1/categories/:id/subcategories
+            // Let's assume /api/v1/subcategories and body has category ID
+            const response = await fetch(`${BASE_URL}/api/v1/subcategories`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: authHeader,
                 },
-                body: JSON.stringify(categoryData),
+                body: JSON.stringify(subCategoryData),
             });
             const data = await response.json();
             if (!response.ok) {
                 const errors = data.errors ? data.errors.map((e: any) => e.msg).join(", ") : null;
-                throw new Error(errors || data.message || "Failed to create category");
+                throw new Error(errors || data.message || "Failed to create subcategory");
             }
             return data.data;
         } catch (error: any) {
@@ -68,12 +74,12 @@ export const createCategory = createAsyncThunk(
     }
 );
 
-export const updateCategory = createAsyncThunk(
-    "category/updateCategory",
+export const updateSubCategory = createAsyncThunk(
+    "subcategory/updateSubCategory",
     async ({ id, data }: { id: string; data: any }, { rejectWithValue, getState }) => {
         try {
             const authHeader = getAuthHeader(getState);
-            const response = await fetch(`${BASE_URL}/api/v1/categories/${id}`, {
+            const response = await fetch(`${BASE_URL}/api/v1/subcategories/${id}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -84,7 +90,7 @@ export const updateCategory = createAsyncThunk(
             const resData = await response.json();
             if (!response.ok) {
                 const errors = resData.errors ? resData.errors.map((e: any) => e.msg).join(", ") : null;
-                throw new Error(errors || resData.message || "Failed to update category");
+                throw new Error(errors || resData.message || "Failed to update subcategory");
             }
             return resData.data;
         } catch (error: any) {
@@ -93,12 +99,12 @@ export const updateCategory = createAsyncThunk(
     }
 );
 
-export const deleteCategory = createAsyncThunk(
-    "category/deleteCategory",
+export const deleteSubCategory = createAsyncThunk(
+    "subcategory/deleteSubCategory",
     async (id: string, { rejectWithValue, getState }) => {
         try {
             const authHeader = getAuthHeader(getState);
-            const response = await fetch(`${BASE_URL}/api/v1/categories/${id}`, {
+            const response = await fetch(`${BASE_URL}/api/v1/subcategories/${id}`, {
                 method: "DELETE",
                 headers: {
                     Authorization: authHeader,
@@ -110,8 +116,8 @@ export const deleteCategory = createAsyncThunk(
             }
 
             if (!response.ok) {
-                const data = await response.json().catch(() => ({ message: "Failed to delete category" }));
-                throw new Error(data.message || "Failed to delete category");
+                const data = await response.json().catch(() => ({ message: "Failed to delete subcategory" }));
+                throw new Error(data.message || "Failed to delete subcategory");
             }
             await response.json();
             return id;
@@ -121,74 +127,74 @@ export const deleteCategory = createAsyncThunk(
     }
 );
 
-const categorySlice = createSlice({
-    name: "category",
+const subcategorySlice = createSlice({
+    name: "subcategory",
     initialState,
     reducers: {},
     extraReducers: (builder) => {
         // Fetch
         builder
-            .addCase(fetchCategories.pending, (state) => {
+            .addCase(fetchSubCategories.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(fetchCategories.fulfilled, (state, action) => {
+            .addCase(fetchSubCategories.fulfilled, (state, action) => {
                 state.loading = false;
-                state.categories = action.payload;
+                state.subcategories = action.payload;
             })
-            .addCase(fetchCategories.rejected, (state, action) => {
+            .addCase(fetchSubCategories.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
             });
 
         // Create
         builder
-            .addCase(createCategory.pending, (state) => {
+            .addCase(createSubCategory.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(createCategory.fulfilled, (state, action) => {
+            .addCase(createSubCategory.fulfilled, (state, action) => {
                 state.loading = false;
-                state.categories.push(action.payload);
+                state.subcategories.push(action.payload);
             })
-            .addCase(createCategory.rejected, (state, action) => {
+            .addCase(createSubCategory.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
             });
 
         // Update
         builder
-            .addCase(updateCategory.pending, (state) => {
+            .addCase(updateSubCategory.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(updateCategory.fulfilled, (state, action) => {
+            .addCase(updateSubCategory.fulfilled, (state, action) => {
                 state.loading = false;
-                const index = state.categories.findIndex(c => c._id === action.payload._id);
+                const index = state.subcategories.findIndex(s => s._id === action.payload._id);
                 if (index !== -1) {
-                    state.categories[index] = action.payload;
+                    state.subcategories[index] = action.payload;
                 }
             })
-            .addCase(updateCategory.rejected, (state, action) => {
+            .addCase(updateSubCategory.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
             });
 
         // Delete
         builder
-            .addCase(deleteCategory.pending, (state) => {
+            .addCase(deleteSubCategory.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(deleteCategory.fulfilled, (state, action) => {
+            .addCase(deleteSubCategory.fulfilled, (state, action) => {
                 state.loading = false;
-                state.categories = state.categories.filter(c => c._id !== action.payload);
+                state.subcategories = state.subcategories.filter(s => s._id !== action.payload);
             })
-            .addCase(deleteCategory.rejected, (state, action) => {
+            .addCase(deleteSubCategory.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
             });
     },
 });
 
-export default categorySlice.reducer;
+export default subcategorySlice.reducer;

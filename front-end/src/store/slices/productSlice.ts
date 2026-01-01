@@ -47,7 +47,7 @@ const initialState: ProductState = {
 // Async Thunks
 export const fetchProducts = createAsyncThunk(
     "product/fetchProducts",
-    async (queryParams: string = "", { rejectWithValue }) => {
+    async (queryParams: string | undefined = "", { rejectWithValue }) => {
         try {
             const response = await fetch(`${BASE_URL}/api/v1/products?${queryParams}`);
             const data = await response.json();
