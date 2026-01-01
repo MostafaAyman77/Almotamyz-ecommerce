@@ -5,6 +5,9 @@ import brandReducer from "./slices/brandSlice";
 import productReducer from "./slices/productSlice";
 import categoryReducer from "./slices/categorySlice";
 import subcategoryReducer from "./slices/subcategorySlice";
+import couponReducer from "./slices/couponSlice";
+import reviewReducer from "./slices/reviewSlice";
+import userReducer from "./slices/userSlice";
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +17,9 @@ export const store = configureStore({
     product: productReducer,
     category: categoryReducer,
     subcategory: subcategoryReducer,
+    coupon: couponReducer,
+    review: reviewReducer,
+    user: userReducer,
   },
 });
 
