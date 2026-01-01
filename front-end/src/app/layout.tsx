@@ -53,7 +53,7 @@ export default function RootLayout({ children }: IRootLayoutProps) {
             <main className="mt-20 container mx-auto px-4 py-4">
                 {children}
             </main>
-            <Footer />
+            {/* <Footer /> */}
           </Providers>
       </body>
     </html>

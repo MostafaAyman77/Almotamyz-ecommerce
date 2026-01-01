@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Navbar from "../Navbar"
 import { IoMenu } from "react-icons/io5"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { MdClose } from "react-icons/md"
 import SearchBar from "../SearchBar"
 import { BsCart3 } from "react-icons/bs"
@@ -14,6 +14,14 @@ const Header = () => {
     const [isOpen, setIsOpen] = useState(false);
     const favoriteCount = useSelector((state: any) => state.cart.favorites.length);
     const cartCount = useSelector((state: any) => state.cart.cartItems.length);
+    const [mounted, setMounted] = useState(false);
+
+useEffect(() => {
+  setMounted(true);
+}, []);
+
+if (!mounted) return null;
+
     return (
         <>
             <header className="fixed top-0 bg-white/95 w-full backdrop-blur-sm shadow-sm z-50">
@@ -68,7 +76,7 @@ const Header = () => {
                     </div>
                     {isOpen && (
                         <nav className="md:hidden flex items-center flex-col space-y-3 mt-4 pb-4">
-                            <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/about"}>الصفحة الرئيسية</Link>
+                            <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/"}>الصفحة الرئيسية</Link>
                             <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/products"}>المنتجات</Link>
                             <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/offers"}>العروض</Link>
                             <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/contact"}>تواصل معنا</Link>
