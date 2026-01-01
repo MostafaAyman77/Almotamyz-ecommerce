@@ -96,12 +96,15 @@ const LoginForm = () => {
             // Assuming backend sets cookie or we need to store token manually? 
             // The prompt says "Token handling MUST follow backend + existing frontend logic".
             // Usually JSON tokens are stored in localStorage/cookies.
-            // Based on typical express-async-handler + JWT pattern:
-            if (data.token) {
-                // Ensure backend sends 'data.data' for user object if available, otherwise just token
-                dispatch(loginSuccess({ token: data.token, user: data.data || null }));
-                localStorage.setItem("token", data.token); // Common fallback if not http-only cookie
-                document.cookie = `token=${data.token}; path=/; max-age=86400;`; // Basic cookie set for middleware access if needed immediately
+            // Token handling based on backend response structure { data: user, tokens: { accessToken, refreshToken } }
+            const token = data.token || data.tokens?.accessToken;
+
+            if (token) {
+                // Ensure backend sends 'data.data' for user object if available (response has 'data' property which is user)
+                // data from fetch is the whole json. So data.data is the user object.
+                dispatch(loginSuccess({ token: token, user: data.data || null }));
+                localStorage.setItem("token", token);
+                document.cookie = `token=${token}; path=/; max-age=86400;`;
             }
 
             router.push("/");

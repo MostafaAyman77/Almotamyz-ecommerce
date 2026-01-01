@@ -7,7 +7,7 @@ interface AuthState {
 
 const initialState: AuthState = {
     token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-    user: null, // Could also persist user data in local storage if needed, but token is key
+    user: typeof window !== 'undefined' && localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null,
 };
 
 const authSlice = createSlice({
@@ -19,6 +19,9 @@ const authSlice = createSlice({
             state.user = action.payload.user || null;
             if (typeof window !== 'undefined') {
                 localStorage.setItem('token', action.payload.token);
+                if (action.payload.user) {
+                    localStorage.setItem('user', JSON.stringify(action.payload.user));
+                }
             }
         },
         logout: (state) => {
@@ -26,6 +29,7 @@ const authSlice = createSlice({
             state.user = null;
             if (typeof window !== 'undefined') {
                 localStorage.removeItem('token');
+                localStorage.removeItem('user');
             }
         },
         // Optional: hydrate user if we fetch profile separately
