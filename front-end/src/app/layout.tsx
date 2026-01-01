@@ -40,21 +40,21 @@ export default function RootLayout({ children }: IRootLayoutProps) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-          <Providers>
-            <Header />
-            <Toaster position="bottom-left" toastOptions={{
-              style: {
-                background: "#e9e9e9",
-                borderRadius: "5px",
-                padding: "14px",
-              }
-            }}/>
-            {/* <ToastContainer position="top-center" theme="colored" /> */}
-            <main className="mt-20 container mx-auto px-4 py-4">
-                {children}
-            </main>
-            {/* <Footer /> */}
-          </Providers>
+        <Providers>
+          <Header />
+          <Toaster position="top-center" toastOptions={{
+            style: {
+              background: "#e9e9e9",
+              borderRadius: "5px",
+              padding: "14px",
+            }
+          }} />
+          {/* <ToastContainer position="top-center" theme="colored" /> */}
+          <main className="mt-20 container mx-auto px-4 py-4">
+            {children}
+          </main>
+          {/* <Footer /> */}
+        </Providers>
       </body>
     </html>
   );
