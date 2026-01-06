@@ -25,27 +25,27 @@ export default function ProductCard({ item }: any) {
 
   // 🛒 Add to cart
   const handleAddToCart = (e: React.MouseEvent) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     if (isInCart) return;
     dispatch(addToCart(item));
     toast.success(
-        <div className="toast-wrapper">
-            <img className='toast-image' src={item.images[0]} alt="" />
-            <div className="toast-content">
-                <strong>{item.title}</strong>
-                تمت إضافتها إلى العربة
-                <div>
-                    <Link href="/cart">
-                        <button
-                            className={`flex items-center justify-center text-white px-8 py-3 font-semibold rounded-xl border border-gray-300 bg-white text-gray-900 hover:bg-gray-50`}
-                            style={{backgroundColor: "var(--primary-color)", cursor: "pointer"}}
-                        >
-                         اعرض العربة
-                        </button> 
-                    </Link>
-                </div>
-            </div>
+      <div className="toast-wrapper">
+        <img className='toast-image' src={item.images[0]} alt="" />
+        <div className="toast-content">
+          <strong>{item.title}</strong>
+          تمت إضافتها إلى العربة
+          <div>
+            <Link href="/cart">
+              <button
+                className={`flex items-center justify-center text-white px-8 py-3 font-semibold rounded-xl border border-gray-300 bg-white text-gray-900 hover:bg-gray-50`}
+                style={{ backgroundColor: "var(--primary-color)", cursor: "pointer" }}
+              >
+                اعرض العربة
+              </button>
+            </Link>
+          </div>
         </div>
+      </div>
     );
   };
 
@@ -63,22 +63,22 @@ export default function ProductCard({ item }: any) {
 
   return (
     <div
-      onClick={() => router.push("/test")}
+      onClick={() => router.push(`/products/${item._id}`)}
       className={"bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col cursor-pointer"}
-      >
+    >
       {/* Image */}
       <div className="relative h-40 bg-gray-100 flex items-center justify-center">
         <img
           src={item.images?.[0]}
           alt={item.title}
           className="w-full h-full object-cover"
-          />
+        />
 
         {/* Favorite Icon */}
         <button
           onClick={handleFavorite}
           className="absolute top-3 right-3 text-gray-700 bg-white p-2 rounded-full shadow"
-          style={{cursor: "pointer"}}
+          style={{ cursor: "pointer" }}
         >
           {isFavorite ? (
             <FaHeart style={{ color: "var(--primary-color)" }} />
@@ -104,14 +104,13 @@ export default function ProductCard({ item }: any) {
         <button
           onClick={handleAddToCart}
           className={`w-full mt-3 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition
-            ${
-              isInCart
-                ? "bg-gray-400 cursor-not-allowed opacity-60"
-                : "bg-green-600 hover:bg-green-700 text-white"
+            ${isInCart
+              ? "bg-gray-400 cursor-not-allowed opacity-60"
+              : "bg-green-600 hover:bg-green-700 text-white"
             }`}
         >
-            <span>{isInCart ? "مضاف بالفعل" : "أضف للسلة"}</span>
-            <FaShoppingCart size={16} />
+          <span>{isInCart ? "مضاف بالفعل" : "أضف للسلة"}</span>
+          <FaShoppingCart size={16} />
         </button>
       </div>
     </div>

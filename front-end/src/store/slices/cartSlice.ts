@@ -4,7 +4,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../store";
 
 interface Product {
-  id: number;
+  id: string;
   title: string;
   images: string[];
   price: number;
@@ -32,18 +32,18 @@ const cartSlice = createSlice({
   initialState,
   reducers: {
     addToCart(state, action: PayloadAction<Product>) {
-      
+
       const exist = state.cartItems.find(
         (item) => item.id === action.payload.id
       );
 
-      if(!exist){
+      if (!exist) {
         state.cartItems.push({ ...action.payload, quantity: 1 });
         localStorage.setItem("cartItems", JSON.stringify(state.cartItems));
       }
     },
 
-    removeFromCart(state, action: PayloadAction<number>) {
+    removeFromCart(state, action: PayloadAction<string>) {
       state.cartItems = state.cartItems.filter((i) => i.id !== action.payload);
       localStorage.setItem("cartItems", JSON.stringify(state.cartItems));
     },
@@ -52,7 +52,7 @@ const cartSlice = createSlice({
       localStorage.removeItem("cartItems");
     },
 
-    increaseQuantity(state, action: PayloadAction<number>) {
+    increaseQuantity(state, action: PayloadAction<string>) {
       state.cartItems = state.cartItems.map((item) =>
         item.id === action.payload
           ? { ...item, quantity: item.quantity! + 1 }
@@ -62,7 +62,7 @@ const cartSlice = createSlice({
       localStorage.setItem("cartItems", JSON.stringify(state.cartItems));
     },
 
-    decreaseQuantity(state, action: PayloadAction<number>) {
+    decreaseQuantity(state, action: PayloadAction<string>) {
       state.cartItems = state.cartItems.map((item) =>
         item.id === action.payload && item.quantity! > 1
           ? { ...item, quantity: item.quantity! - 1 }
@@ -82,7 +82,7 @@ const cartSlice = createSlice({
       }
     },
 
-    removeFromFavorites(state, action: PayloadAction<number>) {
+    removeFromFavorites(state, action: PayloadAction<string>) {
       state.favorites = state.favorites.filter((i) => i.id !== action.payload);
       localStorage.setItem(
         "favoritesItems",
