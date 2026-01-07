@@ -92,19 +92,23 @@ const LoginForm = () => {
 
             // Success
             toast.success("Login successful!");
-            // Logic for token handling should be here if backend returns it directly or via cookie
-            // Assuming backend sets cookie or we need to store token manually? 
-            // The prompt says "Token handling MUST follow backend + existing frontend logic".
-            // Usually JSON tokens are stored in localStorage/cookies.
-            // Token handling based on backend response structure { data: user, tokens: { accessToken, refreshToken } }
-            const token = data.token || data.tokens?.accessToken;
 
-            if (token) {
-                // Ensure backend sends 'data.data' for user object if available (response has 'data' property which is user)
-                // data from fetch is the whole json. So data.data is the user object.
-                dispatch(loginSuccess({ token: token, user: data.data || null }));
-                localStorage.setItem("token", token);
-                document.cookie = `token=${token}; path=/; max-age=86400;`;
+            // Extract tokens from backend response structure: { data: user, tokens: { accessToken, refreshToken } }
+            const accessToken = data.tokens?.accessToken || data.token;
+            const refreshToken = data.tokens?.refreshToken;
+
+            if (accessToken) {
+                dispatch(loginSuccess({
+                    token: accessToken,
+                    refreshToken: refreshToken,
+                    user: data.data || null
+                }));
+
+                localStorage.setItem("token", accessToken);
+                if (refreshToken) {
+                    localStorage.setItem("refreshToken", refreshToken);
+                }
+                document.cookie = `token=${accessToken}; path=/; max-age=86400;`;
             }
 
             router.push("/");
