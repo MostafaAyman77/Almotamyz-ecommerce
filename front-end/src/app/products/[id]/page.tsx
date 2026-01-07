@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import RelatedProducts from "@/components/RelatedProducts";
 import AddToCartButton from "@/app/products/[id]/AddToCartButton";
+import ProductImageGallery from "@/app/products/[id]/ProductImageGallery";
 import { FaStar } from "react-icons/fa";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8000";
@@ -68,40 +69,7 @@ export default async function ProductDetailsPage({
                 <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8">
                         {/* Left Side - Images */}
-                        <div className="space-y-4">
-                            {/* Main Image */}
-                            <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
-                                {product.imageCover ? (
-                                    <img
-                                        src={product.imageCover}
-                                        alt={product.title}
-                                        className="w-full h-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                        لا توجد صورة
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Thumbnail Images */}
-                            {allImages.length > 1 && (
-                                <div className="grid grid-cols-4 gap-2">
-                                    {allImages.slice(0, 4).map((image, index) => (
-                                        <div
-                                            key={index}
-                                            className="relative h-20 bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-200 hover:border-green-500 transition-colors cursor-pointer"
-                                        >
-                                            <img
-                                                src={image}
-                                                alt={`${product.title} - ${index + 1}`}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        <ProductImageGallery images={allImages} title={product.title} />
 
                         {/* Right Side - Product Info */}
                         <div className="space-y-6">

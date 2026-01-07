@@ -16,21 +16,24 @@ export default function ProductCard({ item }: any) {
   const dispatch = useDispatch();
   const router = useRouter();
 
+  const productId = item._id || item.id;
+  const productImage = item.imageCover || item.images?.[0];
+
   const cartItems = useSelector((state: RootState) => state.cart.cartItems);
-  const isInCart = cartItems.some((i) => i.id === item.id);
+  const isInCart = cartItems.some((i) => i.id === productId);
 
 
   const favorites = useSelector((state: RootState) => state.cart.favorites);
-  const isFavorite = favorites.some((i) => i.id === item.id);
+  const isFavorite = favorites.some((i) => i.id === productId);
 
   // 🛒 Add to cart
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isInCart) return;
-    dispatch(addToCart(item));
+    dispatch(addToCart({ ...item, id: productId, images: [productImage, ...(item.images || [])] }));
     toast.success(
       <div className="toast-wrapper">
-        <img className='toast-image' src={item.images[0]} alt="" />
+        <img className='toast-image' src={productImage} alt="" />
         <div className="toast-content">
           <strong>{item.title}</strong>
           تمت إضافتها إلى العربة
@@ -53,10 +56,10 @@ export default function ProductCard({ item }: any) {
     e.stopPropagation();
 
     if (isFavorite) {
-      dispatch(removeFromFavorites(item.id));
+      dispatch(removeFromFavorites(productId));
       toast.error(`${item.title} removed from favorites`);
     } else {
-      dispatch(addToFavorite(item));
+      dispatch(addToFavorite({ ...item, id: productId, images: [productImage, ...(item.images || [])] }));
       toast.success(`${item.title} added to favorites`);
     }
   };
@@ -69,7 +72,7 @@ export default function ProductCard({ item }: any) {
       {/* Image */}
       <div className="relative h-40 bg-gray-100 flex items-center justify-center">
         <img
-          src={item.images?.[0]}
+          src={productImage}
           alt={item.title}
           className="w-full h-full object-cover"
         />
