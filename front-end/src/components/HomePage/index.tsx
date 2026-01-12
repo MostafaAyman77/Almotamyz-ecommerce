@@ -1,13 +1,13 @@
 import Hero from "./Hero"
 import WebPlans from "./Brands"
-import BestSales from "../BestSales"
+// import BestSales from "../BestSales"
 
 const HomePage = () => {
   return (
     <div>
-        <Hero />
-        <WebPlans />
-        <BestSales />
+      <Hero />
+      <WebPlans />
+      {/* <BestSales /> */}
     </div>
   )
 }
