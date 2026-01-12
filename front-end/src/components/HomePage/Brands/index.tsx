@@ -1,3 +1,5 @@
+"use client";
+
 import Wadfow from "@/../public/assets/images/wadfowLogo.png";
 import Kendo from "@/../public/assets/images/kendoLogo.png";
 import PowerAction from "@/../public/assets/images/powerActionLogo.png";
@@ -16,7 +18,7 @@ const brandsData = [
     id: 2,
     name: "Wadfow",
     slug: "wadfow",
-    image: Wadfow 
+    image: Wadfow
   },
   {
     id: 3,
