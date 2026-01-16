@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import {
   increaseQuantity,
@@ -15,6 +16,7 @@ import Styles from "./style.module.css";
 
 const Cart = () => {
   const dispatch = useDispatch();
+  const router = useRouter();
 
   const cartItems = useSelector(
     (state: RootState) => state.cart.cartItems
@@ -27,13 +29,13 @@ const Cart = () => {
       <div className={`${Styles["order-summary"]}`}>
         <div className={`${Styles["cart-header"]}`}>
           <h1>ملخص طلبك</h1>
-          <button 
-            className={`${Styles["delete-all"]}`} 
+          <button
+            className={`${Styles["delete-all"]}`}
             onClick={() => dispatch(clearCart())}
           >
             حذف الكل
-          </button>  
-          </div>
+          </button>
+        </div>
 
         <div className={`${Styles["items"]}`}>
           {cartItems.length === 0 ? (
@@ -97,7 +99,7 @@ const Cart = () => {
           </div>
 
           <div className={`${Styles["btn-checkout"]}`}>
-            <button type="submit">اطلب الآن</button>
+            <button type="submit" onClick={() => router.push('/checkout')}>اطلب الآن</button>
           </div>
         </div>
       </div>
