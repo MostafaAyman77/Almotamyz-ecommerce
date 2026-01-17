@@ -39,7 +39,10 @@ const Cart = () => {
 
         <div className={`${Styles["items"]}`}>
           {cartItems.length === 0 ? (
-            <p>العربة الخاصة بك فارغة</p>
+            <div className="flex flex-col items-center justify-center gap-4">
+              <p>العربة الخاصة بك فارغة</p>
+              <button className="[background-color:var(--primary-color)] text-white px-6 py-2 rounded-lg font-bold cursor-pointer" type="submit" onClick={() => router.push('/products')}>انتقل للمتجر</button>
+            </div>
           ) : (
             cartItems.map((item) => (
               <div key={item.id} className={`${Styles["item-cart"]}`}>
@@ -99,7 +102,20 @@ const Cart = () => {
           </div>
 
           <div className={`${Styles["btn-checkout"]}`}>
-            <button type="submit" onClick={() => router.push('/checkout')}>اطلب الآن</button>
+            <button
+              type="submit"
+              disabled={cartItems.length === 0}
+              onClick={() => router.push('/checkout')}
+              style={{
+                opacity: cartItems.length === 0 ? 0.5 : 1,
+                cursor: cartItems.length === 0 ? "not-allowed" : "pointer",
+                backgroundColor: cartItems.length === 0 ? "#ccc" : "var(--primary-color)",
+                color: cartItems.length === 0 ? "#000" : "white",
+                border: cartItems.length === 0 ? "none" : "solid",
+              }}
+            >
+              اطلب الآن
+            </button>
           </div>
         </div>
       </div>

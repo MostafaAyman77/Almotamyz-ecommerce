@@ -40,11 +40,11 @@ export default function ProductCard({ item }: any) {
       className={"bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col cursor-pointer"}
     >
       {/* Image */}
-      <div className="relative h-40 bg-gray-100 flex items-center justify-center">
+      <div className="relative h-40 bg-white flex items-center justify-center">
         <img
           src={productImage}
           alt={item.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
         />
 
         {/* Favorite Icon */}
