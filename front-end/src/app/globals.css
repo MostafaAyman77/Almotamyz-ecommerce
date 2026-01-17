@@ -1,4 +1,11 @@
 @import "tailwindcss";
+
+@layer base {
+  button {
+    cursor: pointer;
+  }
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
 
 
@@ -41,6 +48,7 @@ body {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
 }
 
