@@ -63,7 +63,7 @@ export default function ProductCarousel({ title, apiEndpoint }: ProductCarouselP
     }
 
     return (
-        <section className="py-12 px-4 container mx-auto overflow-hidden">
+        <section className="px-4 container mx-auto overflow-hidden">
             <div className="flex justify-between items-center mb-8">
                 {/* <h2 className="text-2xl md:text-3xl font-bold [color:var(--primary-color)] border-b border-primary border-b-2 pb-2">{title}</h2>
                  */}
@@ -117,10 +117,10 @@ export default function ProductCarousel({ title, apiEndpoint }: ProductCarouselP
                     1024: { slidesPerView: 4 },
                     1280: { slidesPerView: 5 },
                 }}
-                className="w-full !px-1 !py-4"
+                className="w-full !px-1 !py-1"
             >
                 {products.map((product) => (
-                    <SwiperSlide key={product._id} className="h-auto">
+                    <SwiperSlide key={product._id} className="!h-auto flex">
                         <ProductCard
                             item={{
                                 id: product._id,

@@ -12,11 +12,12 @@ import { useDispatch, useSelector } from "react-redux"
 import { RiLoginBoxFill, RiLogoutBoxFill } from "react-icons/ri"
 import { logout } from "@/store/slices/authSlice"
 import toast from "react-hot-toast"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 
 const Header = () => {
     const dispatch = useDispatch();
     const router = useRouter();
+    const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
     const favoriteCount = useSelector((state: any) => state.cart.favorites.length);
     const cartCount = useSelector((state: any) => state.cart.cartItems.length);
@@ -132,16 +133,37 @@ const Header = () => {
 
                     {isOpen && (
                         <nav className="md:hidden flex items-center flex-col space-y-3 mt-4 pb-4 border-t pt-4">
-                            <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/"}>الصفحة الرئيسية</Link>
-                            <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/products"}>المنتجات</Link>
-                            <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/offers"}>العروض</Link>
-                            <Link className="text-gray-700 hover:text-green-600 transition-colors capitalize" href={"/contact"}>تواصل معنا</Link>
+                            {[
+                                { name: "الصفحة الرئيسية", href: "/" },
+                                { name: "المنتجات", href: "/products" },
+                                { name: "العروض", href: "/offers" },
+                                { name: "تواصل معنا", href: "/contact" },
+                            ].map((link) => {
+                                const isActive = pathname === link.href;
+                                return (
+                                    <Link
+                                        key={link.href}
+                                        href={link.href}
+                                        className={`
+                                            relative py-1 capitalize transition-colors duration-300
+                                            ${isActive ? "text-[var(--primary-color)] font-bold" : "text-gray-700 hover:text-[var(--primary-color)]"}
+                                            after:content-[''] after:absolute after:left-1/2 after:bottom-0 
+                                            after:h-[2px] after:bg-[var(--primary-color)] 
+                                            after:transition-all after:duration-300 after:ease-out after:-translate-x-1/2
+                                            ${isActive ? "after:w-full" : "after:w-0 hover:after:w-full"}
+                                        `}
+                                        onClick={() => setIsOpen(false)}
+                                    >
+                                        {link.name}
+                                    </Link>
+                                );
+                            })}
 
                             {/* Mobile Auth Link (Since icon is hidden) */}
                             {token ? (
                                 <button onClick={handleLogout} className="text-red-500 font-medium">تسجيل الخروج</button>
                             ) : (
-                                <Link href="/login" className="text-green-600 font-medium">تسجيل الدخول</Link>
+                                <Link href="/login" className="text-green-600 font-medium" onClick={() => setIsOpen(false)}>تسجيل الدخول</Link>
                             )}
                         </nav>
                     )}
